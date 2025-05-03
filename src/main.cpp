@@ -151,7 +151,7 @@ void handleNoteOn(uint8_t note)
   if (std::find(tempChord.begin(), tempChord.end(), note) == tempChord.end())
   {
     tempChord.push_back(note);
-    //insertionSort(tempChord);
+    // insertionSort(tempChord);
   }
 }
 void handleNoteOff(uint8_t note)
