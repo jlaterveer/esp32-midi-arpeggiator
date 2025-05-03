@@ -309,6 +309,7 @@ void loop()
     }
   }
 
+  /*
   Serial.print("Base Chord: ");
   for (uint8_t note : baseChord)
     Serial.print(note), Serial.print(" ");
@@ -318,6 +319,7 @@ void loop()
   for (uint8_t note : playingChord)
     Serial.print(note), Serial.print(" ");
   Serial.println();
+  */
 
   if (!noteOnActive && !playingChord.empty() && now - lastNoteTime >= arpInterval)
   {
