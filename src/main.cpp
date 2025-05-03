@@ -309,6 +309,16 @@ void loop()
     }
   }
 
+  Serial.print("Base Chord: ");
+  for (uint8_t note : baseChord)
+    Serial.print(note), Serial.print(" ");
+  Serial.println();
+
+  Serial.print("Playing Chord: ");
+  for (uint8_t note : playingChord)
+    Serial.print(note), Serial.print(" ");
+  Serial.println();
+
   if (!noteOnActive && !playingChord.empty() && now - lastNoteTime >= arpInterval)
   {
     uint8_t noteIndex = 0;
@@ -348,6 +358,10 @@ void loop()
       noteIndex = currentNoteIndex % chordSize;
       break;
     }
+    Serial.print("Current Note Index: ");
+    Serial.println(currentNoteIndex);
+    Serial.print("Note Index: ");
+    Serial.println(noteIndex);
     int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
     lastPlayedNote = transposedNote;
     uint8_t velocityToSend = useVelocityDynamics ? constrain(noteVelocity - random(0, 28), 1, 127) : noteVelocity;
