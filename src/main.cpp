@@ -77,7 +77,7 @@ enum ArpPattern
   RANDOM,
   PLAYED // New pattern
 };
-ArpPattern currentPattern = TRIANGLE;
+ArpPattern currentPattern = UP;
 const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM", "PLAYED"};
 bool ascending = true;
 const uint8_t sineTable[16] = {0, 1, 2, 4, 6, 8, 10, 12, 15, 12, 10, 8, 6, 4, 2, 1};
@@ -205,12 +205,12 @@ void setup()
 
   capturingChord = true;
   tempChord.clear();
-  leadNote = 36;
-  handleNoteOn(36);
-  handleNoteOn(43);
-  handleNoteOn(40);
+  leadNote = 48;
   handleNoteOn(48);
-  handleNoteOff(36);
+  handleNoteOn(55);
+  handleNoteOn(52);
+  handleNoteOn(60);
+  handleNoteOff(48);
 }
 
 // --- LOOP ---
