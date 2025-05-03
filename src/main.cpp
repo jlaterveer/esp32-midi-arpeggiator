@@ -319,12 +319,12 @@ void loop()
   for (uint8_t note : playingChord)
     Serial.print(note), Serial.print(" ");
   Serial.println();
-  */
 
   Serial.print("Current Chord: ");
   for (uint8_t note : currentChord)
     Serial.print(note), Serial.print(" ");
   Serial.println();
+  */
 
   if (!noteOnActive && !playingChord.empty() && now - lastNoteTime >= arpInterval)
   {
