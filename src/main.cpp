@@ -309,6 +309,9 @@ void loop()
     }
   }
 
+  // Sort the playingChord for patterns like UP
+  std::sort(playingChord.begin(), playingChord.end());
+
   /*
   Serial.print("Base Chord: ");
   for (uint8_t note : baseChord)
