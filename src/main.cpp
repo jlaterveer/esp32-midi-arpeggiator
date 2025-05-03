@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <vector>
-//#include <digitalWriteFast.h>
+// #include <digitalWriteFast.h>
 
 // --- CONFIGURATION ---
 const uint8_t midiOutTxPin = 5;
@@ -74,10 +74,11 @@ enum ArpPattern
   TRIANGLE,
   SINE,
   SQUARE,
-  RANDOM
+  RANDOM,
+  PLAYED // New pattern
 };
 ArpPattern currentPattern = TRIANGLE;
-const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM"};
+const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM", "PLAYED"};
 bool ascending = true;
 const uint8_t sineTable[16] = {0, 1, 2, 4, 6, 8, 10, 12, 15, 12, 10, 8, 6, 4, 2, 1};
 
@@ -206,8 +207,8 @@ void setup()
   tempChord.clear();
   leadNote = 36;
   handleNoteOn(36);
-  handleNoteOn(40);
   handleNoteOn(43);
+  handleNoteOn(40);
   handleNoteOn(48);
   handleNoteOff(36);
 }
@@ -272,7 +273,7 @@ void loop()
       octaveRange = constrain(octaveRange + delta, minOctave, maxOctave);
       break;
     case MODE_PATTERN:
-      currentPattern = static_cast<ArpPattern>((currentPattern + delta + 6) % 6);
+      currentPattern = static_cast<ArpPattern>((currentPattern + delta + 7) % 7);
       break;
     case MODE_RESOLUTION:
       notesPerBeatIndex = constrain(notesPerBeatIndex + delta, 0, notesPerBeatOptionsSize - 1);
@@ -343,6 +344,9 @@ void loop()
     case RANDOM:
       noteIndex = random(chordSize);
       break;
+    case PLAYED:
+      noteIndex = currentNoteIndex % chordSize;
+      break;
     }
     int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
     lastPlayedNote = transposedNote;
@@ -380,6 +384,9 @@ void loop()
         currentNoteIndex = (currentNoteIndex + 1) % 2;
         break;
       case RANDOM:
+        break;
+      case PLAYED:
+        currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
         break;
       }
     }
