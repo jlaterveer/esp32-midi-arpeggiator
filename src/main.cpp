@@ -296,38 +296,35 @@ void loop()
     readMidiByte(Serial1.read());
 
   std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
+
+  // Remove duplicates, preserving order for PLAYED
+  std::vector<uint8_t> playedChord;
+  for (uint8_t note : baseChord)
+  {
+    if (std::find(playedChord.begin(), playedChord.end(), note) == playedChord.end())
+    {
+      playedChord.push_back(note);
+    }
+  }
+
+  // For other patterns, create a sorted, deduplicated chord
+  std::vector<uint8_t> orderedChord = playedChord;
+  std::sort(orderedChord.begin(), orderedChord.end());
+
+  // Build the playingChord with octave shifts and no duplicates
   std::vector<uint8_t> playingChord;
+  const std::vector<uint8_t> &chordSource = (currentPattern == PLAYED) ? playedChord : orderedChord;
   for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
   {
     if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
       continue;
-    for (uint8_t note : baseChord)
+    for (uint8_t note : chordSource)
     {
       int shifted = note + 12 * oct;
-      if (shifted >= 0 && shifted <= 127)
+      if (shifted >= 0 && shifted <= 127 && std::find(playingChord.begin(), playingChord.end(), shifted) == playingChord.end())
         playingChord.push_back(shifted);
     }
   }
-
-  // Sort the playingChord for patterns like UP
-  std::sort(playingChord.begin(), playingChord.end());
-
-  /*
-  Serial.print("Base Chord: ");
-  for (uint8_t note : baseChord)
-    Serial.print(note), Serial.print(" ");
-  Serial.println();
-
-  Serial.print("Playing Chord: ");
-  for (uint8_t note : playingChord)
-    Serial.print(note), Serial.print(" ");
-  Serial.println();
-
-  Serial.print("Current Chord: ");
-  for (uint8_t note : currentChord)
-    Serial.print(note), Serial.print(" ");
-  Serial.println();
-  */
 
   if (!noteOnActive && !playingChord.empty() && now - lastNoteTime >= arpInterval)
   {
