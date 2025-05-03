@@ -151,7 +151,7 @@ void handleNoteOn(uint8_t note)
   if (std::find(tempChord.begin(), tempChord.end(), note) == tempChord.end())
   {
     tempChord.push_back(note);
-    insertionSort(tempChord);
+    //insertionSort(tempChord);
   }
 }
 void handleNoteOff(uint8_t note)
@@ -320,6 +320,11 @@ void loop()
     Serial.print(note), Serial.print(" ");
   Serial.println();
   */
+
+  Serial.print("Current Chord: ");
+  for (uint8_t note : currentChord)
+    Serial.print(note), Serial.print(" ");
+  Serial.println();
 
   if (!noteOnActive && !playingChord.empty() && now - lastNoteTime >= arpInterval)
   {
