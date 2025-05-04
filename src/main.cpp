@@ -352,6 +352,11 @@ void loop()
 
   unsigned long noteLengthMs = arpInterval * noteLengthPercent / 100;
 
+  // Ensure nextNoteTime is initialized on first run
+  if (nextNoteTime == 0)
+    nextNoteTime = now;
+
+  uint8_t velocityToSend = noteVelocity; // Declare velocityToSend outside the block
   if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
   {
     uint8_t noteIndex = 0;
@@ -405,18 +410,28 @@ void loop()
     // Calculate timing offset if enabled
     timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
 
-    sendNoteOn(lastPlayedNote, velocityToSend);
-    noteOnStartTime = now; // noteOnStartTime is for note length, not scheduling
+    // Schedule note-on with humanize offset
+    noteOnStartTime = now + timingOffset;
     noteOnActive = true;
 
-    // Schedule the next note time, including humanize offset if enabled
-    nextNoteTime = now + arpInterval + (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
+    // Schedule the next note strictly at the next interval (no humanize offset)
+    nextNoteTime += arpInterval;
   }
 
-  if (noteOnActive && now - noteOnStartTime >= noteLengthMs)
+  // Actually send note-on when the humanized time arrives
+  static bool noteOnSent = false;
+  if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
+  {
+    sendNoteOn(lastPlayedNote, velocityToSend);
+    noteOnSent = true;
+  }
+
+  // Note-off after note length + humanize offset
+  if (noteOnActive && noteOnSent && now >= noteOnStartTime + noteLengthMs)
   {
     sendNoteOff(lastPlayedNote);
     noteOnActive = false;
+    noteOnSent = false;
     if (++noteRepeatCounter >= noteRepeat)
     {
       noteRepeatCounter = 0;
