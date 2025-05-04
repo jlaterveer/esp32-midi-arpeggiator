@@ -42,20 +42,24 @@ enum EncoderMode
   MODE_RESOLUTION,
   MODE_REPEAT,
   MODE_TRANSPOSE,
-  MODE_DYNAMICS
+  MODE_DYNAMICS,
+  MODE_HUMANIZE // New mode for timing humanization
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 9;
+const int encoderModeSize = 10; // Increased by 1
 
 // --- PARAMETERS ---
-int bpm = 96; // Default to 96 BPM
-int noteLengthPercent = 40; // Default to 40% of the interval
-int noteVelocity = 127; // Default to maximum velocity
-int octaveRange = 2; // Default to 2 octaves
-int transpose = 0; // Default to no transposition
+int bpm = 96;                             // Default to 96 BPM
+int noteLengthPercent = 40;               // Default to 40% of the interval
+int noteVelocity = 127;                   // Default to maximum velocity
+int octaveRange = 2;                      // Default to 2 octaves
+int transpose = 0;                        // Default to no transposition
 int velocityDynamicsRange = 0;            // New variable to store the range of velocity adjustments
 const int maxVelocityDynamicsRange = 127; // Maximum range for velocity adjustments
-int velocityDynamicsPercent = 56; // Default to 56% of the maximum range
+int velocityDynamicsPercent = 56;         // Default to 56% of the maximum range
+bool timingHumanize = false;              // New parameter for timing humanization
+int timingHumanizePercent = 4;            // 0-100% of max allowed humanize
+const int maxTimingHumanizePercent = 100;
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -193,6 +197,17 @@ void readMidiByte(uint8_t byte)
   }
 }
 
+// --- TIMING HUMANIZATION FUNCTION ---
+int getTimingHumanizeOffset(unsigned long noteLengthMs)
+{
+  // Maximum allowed humanize is 1/2 of the note length
+  int maxHumanize = noteLengthMs / 2;
+  int timingHumanizeAmount = (maxHumanize * timingHumanizePercent) / 100;
+  if (timingHumanizeAmount == 0)
+    return 0;
+  return random(-timingHumanizeAmount, timingHumanizeAmount + 1);
+}
+
 // --- SETUP ---
 void setup()
 {
@@ -290,6 +305,10 @@ void loop()
     case MODE_DYNAMICS:
       velocityDynamicsPercent = constrain(velocityDynamicsPercent + delta, 0, 100);
       break;
+    case MODE_HUMANIZE:
+      timingHumanizePercent = constrain(timingHumanizePercent + delta, 0, maxTimingHumanizePercent);
+      timingHumanize = (timingHumanizePercent > 0);
+      break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
@@ -328,7 +347,20 @@ void loop()
     }
   }
 
-  if (!noteOnActive && !playingChord.empty() && now - lastNoteTime >= arpInterval)
+  static int timingOffset = 0;           // Store offset for current note
+  static unsigned long nextNoteTime = 0; // Track next note's scheduled time
+
+  unsigned long noteLengthMs = arpInterval * noteLengthPercent / 100;
+
+  // Ensure nextNoteTime is initialized on first run
+  if (nextNoteTime == 0)
+    nextNoteTime = now;
+
+  // Recalculate timingOffset every time arpInterval or noteLengthPercent changes
+  // (timingOffset is recalculated for each note-on event below, so this is correct)
+
+  uint8_t velocityToSend = noteVelocity; // Declare velocityToSend outside the block
+  if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
   {
     uint8_t noteIndex = 0;
     size_t chordSize = playingChord.size();
@@ -378,16 +410,31 @@ void loop()
       velocityToSend = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
     }
 
-    sendNoteOn(lastPlayedNote, velocityToSend);
-    noteOnStartTime = now;
+    // Calculate timing offset if enabled
+    timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
+
+    // Schedule note-on with humanize offset
+    noteOnStartTime = now + timingOffset;
     noteOnActive = true;
-    lastNoteTime = now;
+
+    // Schedule the next note strictly at the next interval (no humanize offset)
+    nextNoteTime += arpInterval;
   }
 
-  if (noteOnActive && now - noteOnStartTime >= (arpInterval * noteLengthPercent / 100))
+  // Actually send note-on when the humanized time arrives
+  static bool noteOnSent = false;
+  if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
+  {
+    sendNoteOn(lastPlayedNote, velocityToSend);
+    noteOnSent = true;
+  }
+
+  // Note-off after note length + humanize offset
+  if (noteOnActive && noteOnSent && now >= noteOnStartTime + noteLengthMs)
   {
     sendNoteOff(lastPlayedNote);
     noteOnActive = false;
+    noteOnSent = false;
     if (++noteRepeatCounter >= noteRepeat)
     {
       noteRepeatCounter = 0;
@@ -430,6 +477,8 @@ void loop()
   static ArpPattern lastPattern = currentPattern;
   static EncoderMode lastMode = encoderMode;
   static int lastUseVelocityDynamics = velocityDynamicsPercent;
+  static bool lastTimingHumanize = timingHumanize;
+  static int lastTimingHumanizePercent = timingHumanizePercent;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -485,6 +534,12 @@ void loop()
     Serial.println(velocityDynamicsPercent);
     lastUseVelocityDynamics = velocityDynamicsPercent;
   }
+  if (encoderMode == MODE_HUMANIZE && timingHumanizePercent != lastTimingHumanizePercent)
+  {
+    Serial.print("Timing Humanize Percent: ");
+    Serial.println(timingHumanizePercent);
+    lastTimingHumanizePercent = timingHumanizePercent;
+  }
 
   if (encoderMode != lastMode)
   {
@@ -517,6 +572,9 @@ void loop()
       break;
     case MODE_DYNAMICS:
       Serial.println("Velocity Dynamics Percent");
+      break;
+    case MODE_HUMANIZE:
+      Serial.println("Timing Humanize Percent");
       break;
     }
     lastMode = encoderMode;
