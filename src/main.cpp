@@ -200,8 +200,8 @@ void readMidiByte(uint8_t byte)
 // --- TIMING HUMANIZATION FUNCTION ---
 int getTimingHumanizeOffset(unsigned long noteLengthMs)
 {
-  // Maximum allowed humanize is 1/4 of the note length
-  int maxHumanize = noteLengthMs / 4;
+  // Maximum allowed humanize is 1/2 of the note length
+  int maxHumanize = noteLengthMs / 2;
   int timingHumanizeAmount = (maxHumanize * timingHumanizePercent) / 100;
   if (timingHumanizeAmount == 0)
     return 0;
@@ -355,6 +355,9 @@ void loop()
   // Ensure nextNoteTime is initialized on first run
   if (nextNoteTime == 0)
     nextNoteTime = now;
+
+  // Recalculate timingOffset every time arpInterval or noteLengthPercent changes
+  // (timingOffset is recalculated for each note-on event below, so this is correct)
 
   uint8_t velocityToSend = noteVelocity; // Declare velocityToSend outside the block
   if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
