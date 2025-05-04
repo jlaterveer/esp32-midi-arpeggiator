@@ -48,23 +48,23 @@ EncoderMode encoderMode = MODE_BPM;
 const int encoderModeSize = 9;
 
 // --- PARAMETERS ---
-int bpm = 96;
-int noteLengthPercent = 50;
-int noteVelocity = 85;
-int octaveRange = 0;
-int transpose = 0;
+int bpm = 96; // Default to 96 BPM
+int noteLengthPercent = 40; // Default to 40% of the interval
+int noteVelocity = 127; // Default to maximum velocity
+int octaveRange = 2; // Default to 2 octaves
+int transpose = 0; // Default to no transposition
 int velocityDynamicsRange = 0;            // New variable to store the range of velocity adjustments
 const int maxVelocityDynamicsRange = 127; // Maximum range for velocity adjustments
-int velocityDynamicsPercent = 0;          // New variable to store the percentage of velocity adjustments
+int velocityDynamicsPercent = 56; // Default to 56% of the maximum range
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
 
 const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
 const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
-int notesPerBeatIndex = 0;
+int notesPerBeatIndex = 3; // Default to 4 notes per beat
 int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-int noteRepeat = 1;
+int noteRepeat = 2; // Default to 2 repeats
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * notesPerBeat);
 
@@ -79,7 +79,7 @@ enum ArpPattern
   RANDOM,
   PLAYED // New pattern
 };
-ArpPattern currentPattern = UP;
+ArpPattern currentPattern = PLAYED;
 const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM", "PLAYED"};
 bool ascending = true;
 const uint8_t sineTable[16] = {0, 1, 2, 4, 6, 8, 10, 12, 15, 12, 10, 8, 6, 4, 2, 1};
