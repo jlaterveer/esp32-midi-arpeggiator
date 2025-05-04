@@ -53,7 +53,8 @@ int noteLengthPercent = 50;
 int noteVelocity = 85;
 int octaveRange = 0;
 int transpose = 0;
-bool useVelocityDynamics = false;
+int velocityDynamicsRange = 0;            // New variable to store the range of velocity adjustments
+const int maxVelocityDynamicsRange = 127; // Maximum range for velocity adjustments
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -286,7 +287,7 @@ void loop()
       transpose = constrain(transpose + delta, minTranspose, maxTranspose);
       break;
     case MODE_DYNAMICS:
-      useVelocityDynamics = !useVelocityDynamics;
+      velocityDynamicsRange = constrain(velocityDynamicsRange + delta, 0, maxVelocityDynamicsRange);
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -365,13 +366,17 @@ void loop()
       noteIndex = currentNoteIndex % chordSize;
       break;
     }
-    Serial.print("Current Note Index: ");
-    Serial.println(currentNoteIndex);
-    Serial.print("Note Index: ");
-    Serial.println(noteIndex);
+    //Serial.print("Current Note Index: ");
+    //Serial.println(currentNoteIndex);
+    //Serial.print("Note Index: ");
+    //Serial.println(noteIndex);
     int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
     lastPlayedNote = transposedNote;
-    uint8_t velocityToSend = useVelocityDynamics ? constrain(noteVelocity - random(0, 28), 1, 127) : noteVelocity;
+    uint8_t velocityToSend = noteVelocity;
+    if (velocityDynamicsRange > 0)
+    {
+      velocityToSend = constrain(noteVelocity - random(0, velocityDynamicsRange + 1), 1, 127);
+    }
     sendNoteOn(lastPlayedNote, velocityToSend);
     noteOnStartTime = now;
     noteOnActive = true;
@@ -423,7 +428,7 @@ void loop()
   static int lastResolutionIndex = notesPerBeatIndex, lastNoteRepeat = noteRepeat, lastTranspose = transpose;
   static ArpPattern lastPattern = currentPattern;
   static EncoderMode lastMode = encoderMode;
-  static bool lastUseVelocityDynamics = useVelocityDynamics;
+  static int lastUseVelocityDynamics = velocityDynamicsRange;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -473,11 +478,11 @@ void loop()
     Serial.println(patternNames[currentPattern]);
     lastPattern = currentPattern;
   }
-  if (encoderMode == MODE_DYNAMICS && useVelocityDynamics != lastUseVelocityDynamics)
+  if (encoderMode == MODE_DYNAMICS && velocityDynamicsRange != lastUseVelocityDynamics)
   {
-    Serial.print("Velocity Dynamics: ");
-    Serial.println(useVelocityDynamics ? "ON" : "OFF");
-    lastUseVelocityDynamics = useVelocityDynamics;
+    Serial.print("Velocity Dynamics Range: ");
+    Serial.println(velocityDynamicsRange);
+    lastUseVelocityDynamics = velocityDynamicsRange;
   }
 
   if (encoderMode != lastMode)
@@ -510,7 +515,7 @@ void loop()
       Serial.println("Transpose");
       break;
     case MODE_DYNAMICS:
-      Serial.println("Velocity Dynamics");
+      Serial.println("Velocity Dynamics Range");
       break;
     }
     lastMode = encoderMode;
