@@ -58,7 +58,7 @@ int velocityDynamicsRange = 0;            // New variable to store the range of 
 const int maxVelocityDynamicsRange = 127; // Maximum range for velocity adjustments
 int velocityDynamicsPercent = 56;         // Default to 56% of the maximum range
 bool timingHumanize = false;              // New parameter for timing humanization
-const int timingHumanizeAmount = 10;      // +/-10ms
+const int timingHumanizeAmount = 3;      // +/-10ms
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
