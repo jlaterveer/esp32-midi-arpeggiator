@@ -403,7 +403,7 @@ void loop()
     lastPlayedNote = transposedNote;
 
     // Apply velocity dynamics as a percentage
-    uint8_t velocityToSend = noteVelocity;
+    velocityToSend = noteVelocity; // Ensure this variable is declared earlier
     if (velocityDynamicsPercent > 0)
     {
       int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
