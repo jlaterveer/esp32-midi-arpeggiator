@@ -43,10 +43,11 @@ enum EncoderMode
   MODE_REPEAT,
   MODE_TRANSPOSE,
   MODE_DYNAMICS,
-  MODE_HUMANIZE // New mode for timing humanization
+  MODE_HUMANIZE,
+  MODE_LENGTH_RANDOMIZE // New mode for note length randomization
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 10; // Increased by 1
+const int encoderModeSize = 11; // Increased by 1
 
 // --- PARAMETERS ---
 int bpm = 96;                             // Default to 96 BPM
@@ -60,6 +61,10 @@ int velocityDynamicsPercent = 56;         // Default to 56% of the maximum range
 bool timingHumanize = false;              // New parameter for timing humanization
 int timingHumanizePercent = 4;            // 0-100% of max allowed humanize
 const int maxTimingHumanizePercent = 100;
+
+// --- NEW: NOTE LENGTH RANDOMIZATION ---
+int noteLengthRandomizePercent = 0; // 0-100% of max allowed shortening
+const int maxNoteLengthRandomizePercent = 100;
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -208,6 +213,18 @@ int getTimingHumanizeOffset(unsigned long noteLengthMs)
   return random(-timingHumanizeAmount, timingHumanizeAmount + 1);
 }
 
+// --- NOTE LENGTH RANDOMIZATION FUNCTION ---
+unsigned long getRandomizedNoteLength(unsigned long noteLengthMs)
+{
+  // Maximum allowed shortening is 1/2 of the note length
+  unsigned long maxShorten = noteLengthMs / 2;
+  unsigned long shortenAmount = (maxShorten * noteLengthRandomizePercent) / 100;
+  if (shortenAmount == 0)
+    return noteLengthMs;
+  unsigned long randomShorten = random(0, shortenAmount + 1);
+  return noteLengthMs - randomShorten;
+}
+
 // --- SETUP ---
 void setup()
 {
@@ -309,6 +326,9 @@ void loop()
       timingHumanizePercent = constrain(timingHumanizePercent + delta, 0, maxTimingHumanizePercent);
       timingHumanize = (timingHumanizePercent > 0);
       break;
+    case MODE_LENGTH_RANDOMIZE:
+      noteLengthRandomizePercent = constrain(noteLengthRandomizePercent + delta, 0, maxNoteLengthRandomizePercent);
+      break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
@@ -351,13 +371,12 @@ void loop()
   static unsigned long nextNoteTime = 0; // Track next note's scheduled time
 
   unsigned long noteLengthMs = arpInterval * noteLengthPercent / 100;
+  // --- Apply note length randomization ---
+  unsigned long randomizedNoteLengthMs = getRandomizedNoteLength(noteLengthMs);
 
   // Ensure nextNoteTime is initialized on first run
   if (nextNoteTime == 0)
     nextNoteTime = now;
-
-  // Recalculate timingOffset every time arpInterval or noteLengthPercent changes
-  // (timingOffset is recalculated for each note-on event below, so this is correct)
 
   uint8_t velocityToSend = noteVelocity; // Declare velocityToSend outside the block
   if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
@@ -430,7 +449,7 @@ void loop()
   }
 
   // Note-off after note length + humanize offset
-  if (noteOnActive && noteOnSent && now >= noteOnStartTime + noteLengthMs)
+  if (noteOnActive && noteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
   {
     sendNoteOff(lastPlayedNote);
     noteOnActive = false;
@@ -479,6 +498,7 @@ void loop()
   static int lastUseVelocityDynamics = velocityDynamicsPercent;
   static bool lastTimingHumanize = timingHumanize;
   static int lastTimingHumanizePercent = timingHumanizePercent;
+  static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -540,6 +560,12 @@ void loop()
     Serial.println(timingHumanizePercent);
     lastTimingHumanizePercent = timingHumanizePercent;
   }
+  if (encoderMode == MODE_LENGTH_RANDOMIZE && noteLengthRandomizePercent != lastNoteLengthRandomizePercent)
+  {
+    Serial.print("Note Length Randomize Percent: ");
+    Serial.println(noteLengthRandomizePercent);
+    lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
+  }
 
   if (encoderMode != lastMode)
   {
@@ -575,6 +601,9 @@ void loop()
       break;
     case MODE_HUMANIZE:
       Serial.println("Timing Humanize Percent");
+      break;
+    case MODE_LENGTH_RANDOMIZE:
+      Serial.println("Note Length Randomize Percent");
       break;
     }
     lastMode = encoderMode;
