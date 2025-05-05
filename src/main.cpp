@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <vector>
 // #include <digitalWriteFast.h>
+#include <USB.h>
+#include <USBMIDI.h>
 
 // --- CONFIGURATION ---
 const uint8_t midiOutTxPin = 5;
@@ -109,22 +111,26 @@ bool ledFlashing = false;
 const unsigned long ledFlashDuration = 100;
 
 // --- MIDI I/O ---
+USBMIDI usbMIDI; // USB MIDI object
 
 void midiSendByte(uint8_t byte)
 {
   Serial2.write(byte);
+  usbMIDI.write(byte); // Use write() for raw MIDI byte to USB
 }
 void sendNoteOn(uint8_t note, uint8_t velocity)
 {
   midiSendByte(0x90);
   midiSendByte(note);
   midiSendByte(velocity);
+  usbMIDI.noteOn(note, velocity, 1); // Send to USB MIDI (channel 1)
 }
 void sendNoteOff(uint8_t note)
 {
   midiSendByte(0x80);
   midiSendByte(note);
   midiSendByte(0);
+  usbMIDI.noteOff(note, 0, 1); // Send to USB MIDI (channel 1)
 }
 
 // --- MIDI IN PARSING ---
@@ -237,6 +243,9 @@ void setup()
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN
   Serial2.begin(31250, SERIAL_8N1, -1, midiOutTxPin); // MIDI OUT
 
+  USB.begin();
+  usbMIDI.begin();
+
   capturingChord = true;
   tempChord.clear();
   leadNote = 48;
@@ -335,6 +344,27 @@ void loop()
 
   while (Serial1.available())
     readMidiByte(Serial1.read());
+
+  // USB MIDI IN (packet-based)
+  midiEventPacket_t packet;
+  while (usbMIDI.readPacket(&packet))
+  {
+    // MIDI message type is in the upper nibble of packet.header
+    uint8_t cin = packet.header & 0x0F;
+    switch (cin)
+    {
+    case 0x09: // Note On
+      if (packet.byte3 > 0)
+        handleNoteOn(packet.byte2);
+      else
+        handleNoteOff(packet.byte2); // Note On with velocity 0 = Note Off
+      break;
+    case 0x08: // Note Off
+      handleNoteOff(packet.byte2);
+      break;
+      // You can add more MIDI message handling here if needed
+    }
+  }
 
   std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
 
