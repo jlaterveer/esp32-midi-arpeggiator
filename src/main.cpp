@@ -86,10 +86,11 @@ enum ArpPattern
   SINE,
   SQUARE,
   RANDOM,
-  PLAYED // New pattern
+  PLAYED,
+  CHORD // New pattern
 };
 ArpPattern currentPattern = PLAYED;
-const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM", "PLAYED"};
+const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM", "PLAYED", "CHORD"};
 bool ascending = true;
 const uint8_t sineTable[16] = {0, 1, 2, 4, 6, 8, 10, 12, 15, 12, 10, 8, 6, 4, 2, 1};
 
@@ -320,7 +321,7 @@ void loop()
       octaveRange = constrain(octaveRange + delta, minOctave, maxOctave);
       break;
     case MODE_PATTERN:
-      currentPattern = static_cast<ArpPattern>((currentPattern + delta + 7) % 7);
+      currentPattern = static_cast<ArpPattern>((currentPattern + delta + 8) % 8); // Now 8 patterns
       break;
     case MODE_RESOLUTION:
       notesPerBeatIndex = constrain(notesPerBeatIndex + delta, 0, notesPerBeatOptionsSize - 1);
@@ -413,108 +414,182 @@ void loop()
     nextNoteTime = now;
 
   uint8_t velocityToSend = noteVelocity; // Declare velocityToSend outside the block
-  if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
+
+  // --- CHORD pattern state ---
+  static bool chordNotesOn = false;
+  static std::vector<uint8_t> chordNotesPlaying;
+
+  if (currentPattern == CHORD)
   {
-    uint8_t noteIndex = 0;
-    size_t chordSize = playingChord.size();
-    switch (currentPattern)
+    // Play all notes together at every beat, with repeats and all parameters
+    if (!chordNotesOn && !playingChord.empty() && now >= nextNoteTime)
     {
-    case UP:
-      noteIndex = currentNoteIndex % chordSize;
-      break;
-    case DOWN:
-      noteIndex = chordSize - 1 - (currentNoteIndex % chordSize);
-      break;
-    case TRIANGLE:
-      if (ascending)
+      chordNotesPlaying = playingChord;
+      // Apply velocity dynamics as a percentage
+      std::vector<uint8_t> velocities;
+      for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
       {
-        noteIndex = currentNoteIndex;
-        if (noteIndex >= chordSize - 1)
-          ascending = false;
+        uint8_t v = noteVelocity;
+        if (velocityDynamicsPercent > 0)
+        {
+          int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
+          v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
+        }
+        velocities.push_back(v);
+      }
+      // Calculate timing offset if enabled
+      timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
+      noteOnStartTime = now + timingOffset;
+      chordNotesOn = true;
+      noteOnActive = true;
+      noteRepeatCounter = 0;
+      // Schedule the next chord strictly at the next interval
+      nextNoteTime += arpInterval;
+      // Send note-on for all notes at the right time
+    }
+    // Actually send note-on when the humanized time arrives
+    static bool chordNoteOnSent = false;
+    if (chordNotesOn && !chordNoteOnSent && now >= noteOnStartTime)
+    {
+      for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
+      {
+        uint8_t v = noteVelocity;
+        if (velocityDynamicsPercent > 0)
+        {
+          int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
+          v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
+        }
+        sendNoteOn(chordNotesPlaying[i], v);
+      }
+      chordNoteOnSent = true;
+    }
+    // Note-off after note length + humanize offset
+    if (chordNotesOn && chordNoteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
+    {
+      for (uint8_t note : chordNotesPlaying)
+      {
+        sendNoteOff(note);
+      }
+      noteRepeatCounter++;
+      if (noteRepeatCounter >= noteRepeat)
+      {
+        chordNotesOn = false;
+        chordNoteOnSent = false;
+        noteOnActive = false;
       }
       else
       {
-        noteIndex = chordSize - 1 - currentNoteIndex;
-        if (noteIndex == 0)
-          ascending = true;
+        // Repeat the chord again (noteRepeat times)
+        chordNoteOnSent = false;
+        noteOnStartTime = now + timingOffset;
       }
-      break;
-    case SINE:
-      noteIndex = map(sineTable[currentNoteIndex % 16], 0, 15, 0, chordSize - 1);
-      break;
-    case SQUARE:
-      noteIndex = (currentNoteIndex % 2 == 0) ? 0 : chordSize - 1;
-      break;
-    case RANDOM:
-      noteIndex = random(chordSize);
-      break;
-    case PLAYED:
-      noteIndex = currentNoteIndex % chordSize;
-      break;
     }
-    int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
-    lastPlayedNote = transposedNote;
-
-    // Apply velocity dynamics as a percentage
-    velocityToSend = noteVelocity; // Ensure this variable is declared earlier
-    if (velocityDynamicsPercent > 0)
-    {
-      int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
-      velocityToSend = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
-    }
-
-    // Calculate timing offset if enabled
-    timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
-
-    // Schedule note-on with humanize offset
-    noteOnStartTime = now + timingOffset;
-    noteOnActive = true;
-
-    // Schedule the next note strictly at the next interval (no humanize offset)
-    nextNoteTime += arpInterval;
   }
-
-  // Actually send note-on when the humanized time arrives
-  static bool noteOnSent = false;
-  if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
+  else
   {
-    sendNoteOn(lastPlayedNote, velocityToSend);
-    noteOnSent = true;
-  }
-
-  // Note-off after note length + humanize offset
-  if (noteOnActive && noteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
-  {
-    sendNoteOff(lastPlayedNote);
-    noteOnActive = false;
-    noteOnSent = false;
-    if (++noteRepeatCounter >= noteRepeat)
+    if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
     {
-      noteRepeatCounter = 0;
+      uint8_t noteIndex = 0;
+      size_t chordSize = playingChord.size();
       switch (currentPattern)
       {
       case UP:
+        noteIndex = currentNoteIndex % chordSize;
+        break;
       case DOWN:
-        currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
+        noteIndex = chordSize - 1 - (currentNoteIndex % chordSize);
         break;
       case TRIANGLE:
         if (ascending)
-          currentNoteIndex++;
+        {
+          noteIndex = currentNoteIndex;
+          if (noteIndex >= chordSize - 1)
+            ascending = false;
+        }
         else
-          currentNoteIndex--;
-        currentNoteIndex = constrain(currentNoteIndex, 0, playingChord.size() - 1);
+        {
+          noteIndex = chordSize - 1 - currentNoteIndex;
+          if (noteIndex == 0)
+            ascending = true;
+        }
         break;
       case SINE:
-        currentNoteIndex = (currentNoteIndex + 1) % 16;
+        noteIndex = map(sineTable[currentNoteIndex % 16], 0, 15, 0, chordSize - 1);
         break;
       case SQUARE:
-        currentNoteIndex = (currentNoteIndex + 1) % 2;
+        noteIndex = (currentNoteIndex % 2 == 0) ? 0 : chordSize - 1;
         break;
       case RANDOM:
+        noteIndex = random(chordSize);
         break;
       case PLAYED:
-        currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
+        noteIndex = currentNoteIndex % chordSize;
         break;
+      }
+      int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
+      lastPlayedNote = transposedNote;
+
+      // Apply velocity dynamics as a percentage
+      velocityToSend = noteVelocity; // Ensure this variable is declared earlier
+      if (velocityDynamicsPercent > 0)
+      {
+        int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
+        velocityToSend = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
+      }
+
+      // Calculate timing offset if enabled
+      timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
+
+      // Schedule note-on with humanize offset
+      noteOnStartTime = now + timingOffset;
+      noteOnActive = true;
+
+      // Schedule the next note strictly at the next interval (no humanize offset)
+      nextNoteTime += arpInterval;
+    }
+
+    // Actually send note-on when the humanized time arrives
+    static bool noteOnSent = false;
+    if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
+    {
+      sendNoteOn(lastPlayedNote, velocityToSend);
+      noteOnSent = true;
+    }
+
+    // Note-off after note length + humanize offset
+    if (noteOnActive && noteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
+    {
+      sendNoteOff(lastPlayedNote);
+      noteOnActive = false;
+      noteOnSent = false;
+      if (++noteRepeatCounter >= noteRepeat)
+      {
+        noteRepeatCounter = 0;
+        switch (currentPattern)
+        {
+        case UP:
+        case DOWN:
+          currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
+          break;
+        case TRIANGLE:
+          if (ascending)
+            currentNoteIndex++;
+          else
+            currentNoteIndex--;
+          currentNoteIndex = constrain(currentNoteIndex, 0, playingChord.size() - 1);
+          break;
+        case SINE:
+          currentNoteIndex = (currentNoteIndex + 1) % 16;
+          break;
+        case SQUARE:
+          currentNoteIndex = (currentNoteIndex + 1) % 2;
+          break;
+        case RANDOM:
+          break;
+        case PLAYED:
+          currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
+          break;
+        }
       }
     }
   }
