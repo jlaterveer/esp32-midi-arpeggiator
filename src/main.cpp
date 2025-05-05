@@ -117,7 +117,6 @@ USBMIDI usbMIDI; // USB MIDI object
 void midiSendByte(uint8_t byte)
 {
   Serial2.write(byte);
-  usbMIDI.write(byte); // Use write() for raw MIDI byte to USB
 }
 void sendNoteOn(uint8_t note, uint8_t velocity)
 {
