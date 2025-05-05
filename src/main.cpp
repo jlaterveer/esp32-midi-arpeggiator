@@ -54,7 +54,7 @@ const int encoderModeSize = 11; // Increased by 1
 // --- PARAMETERS ---
 int bpm = 96;                             // Default to 96 BPM
 int noteLengthPercent = 40;               // Default to 40% of the interval
-int noteVelocity = 127;                   // Default to maximum velocity
+int noteVelocity = 100;                   // Default to maximum velocity
 int octaveRange = 2;                      // Default to 2 octaves
 int transpose = 0;                        // Default to no transposition
 int velocityDynamicsRange = 0;            // New variable to store the range of velocity adjustments
@@ -241,10 +241,12 @@ void setup()
   rotary_init();
 
   Serial.begin(115200); // Debug
-  while (!Serial)
-  {
-    delay(10);
-  } // Wait for Serial to be ready (important for USB CDC)                                             // <-- Add this line to wait for Serial to be ready (especially important for USB CDC)
+  //while (!Serial)
+  //{
+    delay(100);
+  //} // Wait for Serial to be ready (important for USB CDC)                                             // <-- Add this line to wait for Serial to be ready (especially important for USB CDC)
+  Serial.println("Serial ready"); // Debug
+
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN
   Serial2.begin(31250, SERIAL_8N1, -1, midiOutTxPin); // MIDI OUT
 
