@@ -242,7 +242,10 @@ void setup()
   rotary_init();                         // Initialize rotary encoder pins
 
   Serial.begin(115200);           // Start serial for debugging
-  delay(100);                     // Wait for serial to be ready
+  while (!Serial)
+  {
+    delay(10);
+  }                               // Wait for serial to be ready
   Serial.println("Serial ready"); // Debug message
 
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN (DIN)
