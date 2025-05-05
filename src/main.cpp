@@ -61,9 +61,7 @@ int velocityDynamicsPercent = 56;         // Default to 56% of the maximum range
 bool timingHumanize = false;              // New parameter for timing humanization
 int timingHumanizePercent = 4;            // 0-100% of max allowed humanize
 const int maxTimingHumanizePercent = 100;
-
-// --- NEW: NOTE LENGTH RANDOMIZATION ---
-int noteLengthRandomizePercent = 0; // 0-100% of max allowed shortening
+int noteLengthRandomizePercent = 20; // 0-100% of max allowed shortening
 const int maxNoteLengthRandomizePercent = 100;
 
 const int minOctave = -3, maxOctave = 3;
@@ -206,7 +204,8 @@ void readMidiByte(uint8_t byte)
 int getTimingHumanizeOffset(unsigned long noteLengthMs)
 {
   // Maximum allowed humanize is 1/2 of the note length
-  int maxHumanize = noteLengthMs / 2;
+  int maxHumanize = noteLengthMs;
+  
   int timingHumanizeAmount = (maxHumanize * timingHumanizePercent) / 100;
   if (timingHumanizeAmount == 0)
     return 0;
