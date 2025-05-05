@@ -418,6 +418,7 @@ void loop()
   // --- CHORD pattern state ---
   static bool chordNotesOn = false;
   static std::vector<uint8_t> chordNotesPlaying;
+  static std::vector<uint8_t> chordVelocities; // Store per-note velocities
 
   if (currentPattern == CHORD)
   {
@@ -425,8 +426,8 @@ void loop()
     if (!chordNotesOn && !playingChord.empty() && now >= nextNoteTime)
     {
       chordNotesPlaying = playingChord;
-      // Apply velocity dynamics as a percentage
-      std::vector<uint8_t> velocities;
+      chordVelocities.clear();
+      // Calculate and store velocity for each note
       for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
       {
         uint8_t v = noteVelocity;
@@ -435,17 +436,14 @@ void loop()
           int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
           v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
         }
-        velocities.push_back(v);
+        chordVelocities.push_back(v);
       }
-      // Calculate timing offset if enabled
       timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
       noteOnStartTime = now + timingOffset;
       chordNotesOn = true;
       noteOnActive = true;
       noteRepeatCounter = 0;
-      // Schedule the next chord strictly at the next interval
       nextNoteTime += arpInterval;
-      // Send note-on for all notes at the right time
     }
     // Actually send note-on when the humanized time arrives
     static bool chordNoteOnSent = false;
@@ -453,13 +451,7 @@ void loop()
     {
       for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
       {
-        uint8_t v = noteVelocity;
-        if (velocityDynamicsPercent > 0)
-        {
-          int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
-          v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
-        }
-        sendNoteOn(chordNotesPlaying[i], v);
+        sendNoteOn(chordNotesPlaying[i], chordVelocities[i]);
       }
       chordNoteOnSent = true;
     }
@@ -479,7 +471,6 @@ void loop()
       }
       else
       {
-        // Repeat the chord again (noteRepeat times)
         chordNoteOnSent = false;
         noteOnStartTime = now + timingOffset;
       }
