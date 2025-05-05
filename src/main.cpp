@@ -490,17 +490,25 @@ void loop()
       {
         return step % chordSize;
       }
+      if (noteBalancePercent <= -100)
+        return 0; // Only lowest note
+      if (noteBalancePercent >= 100)
+        return chordSize - 1; // Only highest note
+
       // Map step to a float 0..1
       float t = (float)(step % chordSize) / (float)(chordSize - 1);
-      // Bias t toward 0 (low) or 1 (high) based on noteBalancePercent
       float bias = noteBalancePercent / 100.0f;
+
+      // Corrected: bias strength increases as |bias| increases
+      float exponent = 1.0f + 3.0f * fabsf(bias); // -100% or +100% => 10.0, -10% or +10% => 1.9
+
       if (bias < 0)
       {
-        t = powf(t, 1.0f - bias); // bias < 0: more low notes
+        t = powf(t, exponent); // stronger bias to low notes as bias approaches -100%
       }
       else
       {
-        t = 1.0f - powf(1.0f - t, 1.0f + bias); // bias > 0: more high notes
+        t = 1.0f - powf(1.0f - t, exponent); // stronger bias to high notes as bias approaches +100%
       }
       size_t idx = (size_t)roundf(t * (chordSize - 1));
       return constrain(idx, 0, chordSize - 1);
