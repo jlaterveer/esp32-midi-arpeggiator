@@ -204,7 +204,7 @@ void readMidiByte(uint8_t byte)
 int getTimingHumanizeOffset(unsigned long noteLengthMs)
 {
   // Maximum allowed humanize is 1/2 of the note length
-  int maxHumanize = noteLengthMs;
+  int maxHumanize = noteLengthMs ;
   
   int timingHumanizeAmount = (maxHumanize * timingHumanizePercent) / 100;
   if (timingHumanizeAmount == 0)
@@ -216,7 +216,8 @@ int getTimingHumanizeOffset(unsigned long noteLengthMs)
 unsigned long getRandomizedNoteLength(unsigned long noteLengthMs)
 {
   // Maximum allowed shortening is 1/2 of the note length
-  unsigned long maxShorten = noteLengthMs / 2;
+  unsigned long maxShorten = noteLengthMs;
+  ;
   unsigned long shortenAmount = (maxShorten * noteLengthRandomizePercent) / 100;
   if (shortenAmount == 0)
     return noteLengthMs;
