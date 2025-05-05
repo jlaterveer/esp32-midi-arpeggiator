@@ -210,8 +210,8 @@ void readMidiByte(uint8_t byte)
 int getTimingHumanizeOffset(unsigned long noteLengthMs)
 {
   // Maximum allowed humanize is 1/2 of the note length
-  int maxHumanize = noteLengthMs ;
-  
+  int maxHumanize = noteLengthMs;
+
   int timingHumanizeAmount = (maxHumanize * timingHumanizePercent) / 100;
   if (timingHumanizeAmount == 0)
     return 0;
@@ -239,7 +239,11 @@ void setup()
   pinMode(encoderSW, INPUT_PULLUP);
   rotary_init();
 
-  Serial.begin(115200);                               // Debug
+  Serial.begin(115200); // Debug
+  while (!Serial)
+  {
+    delay(10);
+  } // Wait for Serial to be ready (important for USB CDC)                                             // <-- Add this line to wait for Serial to be ready (especially important for USB CDC)
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN
   Serial2.begin(31250, SERIAL_8N1, -1, midiOutTxPin); // MIDI OUT
 
