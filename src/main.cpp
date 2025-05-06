@@ -47,10 +47,10 @@ enum EncoderMode
   MODE_DYNAMICS,
   MODE_HUMANIZE,
   MODE_LENGTH_RANDOMIZE,
-  MODE_BALANCE2 // Only keep the second balance mode
+  MODE_BALANCE // Renamed from MODE_BALANCE2
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 12; // Decreased by 1
+const int encoderModeSize = 12; // unchanged
 
 // --- PARAMETERS ---
 int bpm = 96;                     // Default to 96 BPM
@@ -64,7 +64,7 @@ int timingHumanizePercent = 4;    // 0-100% of max allowed humanize
 const int maxTimingHumanizePercent = 100;
 int noteLengthRandomizePercent = 20; // 0-100% of max allowed shortening
 const int maxNoteLengthRandomizePercent = 100;
-int noteBalance2Percent = 0; // -100 (lowest notes only) to +100 (highest notes only), step 10
+int noteBalancePercent = 0; // Renamed from noteBalance2Percent
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -371,8 +371,8 @@ void loop()
     case MODE_LENGTH_RANDOMIZE:
       noteLengthRandomizePercent = constrain(noteLengthRandomizePercent + delta, 0, maxNoteLengthRandomizePercent);
       break;
-    case MODE_BALANCE2:
-      noteBalance2Percent = constrain(noteBalance2Percent + delta * 10, -100, 100);
+    case MODE_BALANCE:
+      noteBalancePercent = constrain(noteBalancePercent + delta * 10, -100, 100);
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -433,8 +433,8 @@ void loop()
     }
   }
 
-  // --- Apply note bias based on noteBalance2Percent ---
-  applyNoteBiasToChord(playingChord, noteBalance2Percent);
+  // --- Apply note bias based on noteBalancePercent ---
+  applyNoteBiasToChord(playingChord, noteBalancePercent);
 
   static int timingOffset = 0;           // Store offset for current note
   static unsigned long nextNoteTime = 0; // Track next note's scheduled time
@@ -646,7 +646,7 @@ void loop()
   static bool lastTimingHumanize = timingHumanize;
   static int lastTimingHumanizePercent = timingHumanizePercent;
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
-  static int lastNoteBalance2Percent = noteBalance2Percent;
+  static int lastNoteBalancePercent = noteBalancePercent;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -714,11 +714,11 @@ void loop()
     Serial.println(noteLengthRandomizePercent);
     lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   }
-  if (encoderMode == MODE_BALANCE2 && noteBalance2Percent != lastNoteBalance2Percent)
+  if (encoderMode == MODE_BALANCE && noteBalancePercent != lastNoteBalancePercent)
   {
-    Serial.print("Note Balance2 Percent: ");
-    Serial.println(noteBalance2Percent);
-    lastNoteBalance2Percent = noteBalance2Percent;
+    Serial.print("Note Balance Percent: ");
+    Serial.println(noteBalancePercent);
+    lastNoteBalancePercent = noteBalancePercent;
   }
 
   if (encoderMode != lastMode)
@@ -759,8 +759,8 @@ void loop()
     case MODE_LENGTH_RANDOMIZE:
       Serial.println("Note Length Randomize Percent");
       break;
-    case MODE_BALANCE2:
-      Serial.println("Note Balance2 Percent");
+    case MODE_BALANCE:
+      Serial.println("Note Balance Percent");
       break;
     }
     lastMode = encoderMode;
