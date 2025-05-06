@@ -47,11 +47,10 @@ enum EncoderMode
   MODE_DYNAMICS,
   MODE_HUMANIZE,
   MODE_LENGTH_RANDOMIZE,
-  MODE_BALANCE, // Existing note balance
-  MODE_BALANCE2 // New mode for note balance 2
+  MODE_BALANCE2 // Only keep the second balance mode
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 13; // Increased by 1
+const int encoderModeSize = 12; // Decreased by 1
 
 // --- PARAMETERS ---
 int bpm = 96;                     // Default to 96 BPM
@@ -65,7 +64,6 @@ int timingHumanizePercent = 4;    // 0-100% of max allowed humanize
 const int maxTimingHumanizePercent = 100;
 int noteLengthRandomizePercent = 20; // 0-100% of max allowed shortening
 const int maxNoteLengthRandomizePercent = 100;
-int noteBalancePercent = 0;  // -100 (lowest notes only) to +100 (highest notes only), step 10
 int noteBalance2Percent = 0; // -100 (lowest notes only) to +100 (highest notes only), step 10
 
 const int minOctave = -3, maxOctave = 3;
@@ -373,9 +371,6 @@ void loop()
     case MODE_LENGTH_RANDOMIZE:
       noteLengthRandomizePercent = constrain(noteLengthRandomizePercent + delta, 0, maxNoteLengthRandomizePercent);
       break;
-    case MODE_BALANCE:
-      noteBalancePercent = constrain(noteBalancePercent + delta * 10, -100, 100);
-      break;
     case MODE_BALANCE2:
       noteBalance2Percent = constrain(noteBalance2Percent + delta * 10, -100, 100);
       break;
@@ -438,8 +433,6 @@ void loop()
     }
   }
 
-  // --- Apply note bias based on noteBalancePercent ---
-  applyNoteBiasToChord(playingChord, noteBalancePercent);
   // --- Apply note bias based on noteBalance2Percent ---
   applyNoteBiasToChord(playingChord, noteBalance2Percent);
 
@@ -523,31 +516,12 @@ void loop()
     // Helper lambda to bias note index based on noteBalancePercent
     auto getBalancedNoteIndex = [&](size_t chordSize, size_t step) -> size_t
     {
-      if (noteBalancePercent == 0 || chordSize <= 1)
+      if (chordSize <= 1)
       {
         return step % chordSize;
       }
-      if (noteBalancePercent <= -100)
-        return 0; // Only lowest note
-      if (noteBalancePercent >= 100)
-        return chordSize - 1; // Only highest note
 
-      // Map step to a float 0..1
-      float t = (float)(step % chordSize) / (float)(chordSize - 1);
-      float bias = noteBalancePercent / 100.0f;
-
-      // Corrected: bias strength increases as |bias| increases
-      float exponent = 1.0f + 3.0f * fabsf(bias); // -100% or +100% => 10.0, -10% or +10% => 1.9
-
-      if (bias < 0)
-      {
-        t = powf(t, exponent); // stronger bias to low notes as bias approaches -100%
-      }
-      else
-      {
-        t = 1.0f - powf(1.0f - t, exponent); // stronger bias to high notes as bias approaches +100%
-      }
-      size_t idx = (size_t)roundf(t * (chordSize - 1));
+      size_t idx = step % chordSize;
       return constrain(idx, 0, chordSize - 1);
     };
 
@@ -672,7 +646,6 @@ void loop()
   static bool lastTimingHumanize = timingHumanize;
   static int lastTimingHumanizePercent = timingHumanizePercent;
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
-  static int lastNoteBalancePercent = noteBalancePercent;
   static int lastNoteBalance2Percent = noteBalance2Percent;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
@@ -741,12 +714,6 @@ void loop()
     Serial.println(noteLengthRandomizePercent);
     lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   }
-  if (encoderMode == MODE_BALANCE && noteBalancePercent != lastNoteBalancePercent)
-  {
-    Serial.print("Note Balance Percent: ");
-    Serial.println(noteBalancePercent);
-    lastNoteBalancePercent = noteBalancePercent;
-  }
   if (encoderMode == MODE_BALANCE2 && noteBalance2Percent != lastNoteBalance2Percent)
   {
     Serial.print("Note Balance2 Percent: ");
@@ -791,9 +758,6 @@ void loop()
       break;
     case MODE_LENGTH_RANDOMIZE:
       Serial.println("Note Length Randomize Percent");
-      break;
-    case MODE_BALANCE:
-      Serial.println("Note Balance Percent");
       break;
     case MODE_BALANCE2:
       Serial.println("Note Balance2 Percent");
