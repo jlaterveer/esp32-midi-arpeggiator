@@ -8,7 +8,7 @@
 const uint8_t midiOutTxPin = 5;
 const uint8_t midiInRxPin = 4;
 const uint8_t ledBuiltIn = 21;
-const uint8_t clearButtonPin = 2;
+const uint8_t clearButtonPin = 10;
 
 const uint8_t encoderCLK = 9;
 const uint8_t encoderDT = 8; 
