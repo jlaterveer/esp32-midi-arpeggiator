@@ -11,8 +11,8 @@ const uint8_t ledBuiltIn = 21;
 const uint8_t clearButtonPin = 10;
 
 const uint8_t encoderCLK = 9;
-const uint8_t encoderDT = 8; 
-const uint8_t encoderSW = 7; 
+const uint8_t encoderDT = 8;
+const uint8_t encoderSW = 7;
 const uint8_t encoder0PinA = encoderCLK; // Swap A and B to reverse direction
 const uint8_t encoder0PinB = encoderDT;
 
@@ -47,26 +47,26 @@ enum EncoderMode
   MODE_DYNAMICS,
   MODE_HUMANIZE,
   MODE_LENGTH_RANDOMIZE,
-  MODE_BALANCE // New mode for note balance
+  MODE_BALANCE, // Existing note balance
+  MODE_BALANCE2 // New mode for note balance 2
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 12; // Increased by 1
+const int encoderModeSize = 13; // Increased by 1
 
 // --- PARAMETERS ---
-int bpm = 96;                             // Default to 96 BPM
-int noteLengthPercent = 40;               // Default to 40% of the interval
-int noteVelocity = 127;                   // Default to maximum velocity
-int octaveRange = 2;                      // Default to 2 octaves
-int transpose = 0;                        // Default to no transposition
-int velocityDynamicsRange = 0;            // New variable to store the range of velocity adjustments
-const int maxVelocityDynamicsRange = 127; // Maximum range for velocity adjustments
-int velocityDynamicsPercent = 56;         // Default to 56% of the maximum range
-bool timingHumanize = false;              // New parameter for timing humanization
-int timingHumanizePercent = 4;            // 0-100% of max allowed humanize
+int bpm = 96;                     // Default to 96 BPM
+int noteLengthPercent = 40;       // Default to 40% of the interval
+int noteVelocity = 127;           // Default to maximum velocity
+int octaveRange = 2;              // Default to 2 octaves
+int transpose = 0;                // Default to no transposition
+int velocityDynamicsPercent = 56; // Default to 56% of the maximum range
+bool timingHumanize = false;      // New parameter for timing humanization
+int timingHumanizePercent = 4;    // 0-100% of max allowed humanize
 const int maxTimingHumanizePercent = 100;
 int noteLengthRandomizePercent = 20; // 0-100% of max allowed shortening
 const int maxNoteLengthRandomizePercent = 100;
-int noteBalancePercent = 0; // -100 (lowest notes only) to +100 (highest notes only), step 10
+int noteBalancePercent = 0;  // -100 (lowest notes only) to +100 (highest notes only), step 10
+int noteBalance2Percent = 0; // -100 (lowest notes only) to +100 (highest notes only), step 10
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -233,6 +233,35 @@ unsigned long getRandomizedNoteLength(unsigned long noteLengthMs)
   return noteLengthMs - randomShorten;
 }
 
+// --- NOTE BIAS FUNCTION ---
+// Applies note bias to a chord vector based on percentage.
+// Negative: replace notes with lowest note, Positive: with highest note.
+void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
+{
+  if (chord.empty() || percent == 0)
+    return;
+  size_t chordSize = chord.size();
+  uint8_t targetNote = (percent < 0) ? chord.front() : chord.back();
+  int absPercent = abs(percent);
+  // Number of notes to replace (not counting the already lowest/highest)
+  size_t numToReplace = (chordSize > 1) ? ((chordSize * absPercent + 99) / 100) : 0;
+  if (numToReplace == 0)
+    return;
+  // Build a list of indices to potentially replace (excluding the first/last if already target)
+  std::vector<size_t> indices;
+  for (size_t i = 0; i < chordSize; ++i)
+  {
+    if (chord[i] != targetNote)
+      indices.push_back(i);
+  }
+  // Shuffle and pick indices to replace
+  std::random_shuffle(indices.begin(), indices.end());
+  for (size_t i = 0; i < numToReplace && i < indices.size(); ++i)
+  {
+    chord[indices[i]] = targetNote;
+  }
+}
+
 // --- SETUP ---
 void setup()
 {
@@ -347,6 +376,9 @@ void loop()
     case MODE_BALANCE:
       noteBalancePercent = constrain(noteBalancePercent + delta * 10, -100, 100);
       break;
+    case MODE_BALANCE2:
+      noteBalance2Percent = constrain(noteBalance2Percent + delta * 10, -100, 100);
+      break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
@@ -405,6 +437,11 @@ void loop()
         playingChord.push_back(shifted);
     }
   }
+
+  // --- Apply note bias based on noteBalancePercent ---
+  applyNoteBiasToChord(playingChord, noteBalancePercent);
+  // --- Apply note bias based on noteBalance2Percent ---
+  applyNoteBiasToChord(playingChord, noteBalance2Percent);
 
   static int timingOffset = 0;           // Store offset for current note
   static unsigned long nextNoteTime = 0; // Track next note's scheduled time
@@ -636,6 +673,7 @@ void loop()
   static int lastTimingHumanizePercent = timingHumanizePercent;
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   static int lastNoteBalancePercent = noteBalancePercent;
+  static int lastNoteBalance2Percent = noteBalance2Percent;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -709,6 +747,12 @@ void loop()
     Serial.println(noteBalancePercent);
     lastNoteBalancePercent = noteBalancePercent;
   }
+  if (encoderMode == MODE_BALANCE2 && noteBalance2Percent != lastNoteBalance2Percent)
+  {
+    Serial.print("Note Balance2 Percent: ");
+    Serial.println(noteBalance2Percent);
+    lastNoteBalance2Percent = noteBalance2Percent;
+  }
 
   if (encoderMode != lastMode)
   {
@@ -750,6 +794,9 @@ void loop()
       break;
     case MODE_BALANCE:
       Serial.println("Note Balance Percent");
+      break;
+    case MODE_BALANCE2:
+      Serial.println("Note Balance2 Percent");
       break;
     }
     lastMode = encoderMode;
