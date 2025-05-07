@@ -3,6 +3,7 @@
 // #include <digitalWriteFast.h>
 #include <USB.h>
 #include <USBMIDI.h>
+#include "step_patterns.h" // <-- Add this line to include your step patterns
 
 // --- CONFIGURATION ---
 const uint8_t midiOutTxPin = 5;
