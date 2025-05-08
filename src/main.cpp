@@ -14,7 +14,7 @@ const uint8_t clearButtonPin = 10;
 const uint8_t encoderCLK = 9;
 const uint8_t encoderDT = 8;
 const uint8_t encoderSW = 7;
-const uint8_t encoder0PinA = encoderCLK; // Swap A and B to reverse direction
+const uint8_t encoder0PinA = encoderCLK; 
 const uint8_t encoder0PinB = encoderDT;
 
 // --- ENCODER STATE MACHINE ---
@@ -487,7 +487,8 @@ void loop()
     {
       for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
       {
-        sendNoteOn(chordNotesPlaying[i], chordVelocities[i]);
+        sendNoteOff(chordNotesPlaying[i]); // Ensure all notes are off before sending new note-ons
+        sendNoteOn(chordNotesPlaying[i], chordVelocities[i]); // Send note-on with the corresponding velocity
       }
       chordNoteOnSent = true;
     }
