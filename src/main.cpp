@@ -14,7 +14,7 @@ const uint8_t clearButtonPin = 10;
 const uint8_t encoderCLK = 9;
 const uint8_t encoderDT = 8;
 const uint8_t encoderSW = 7;
-const uint8_t encoder0PinA = encoderCLK; 
+const uint8_t encoder0PinA = encoderCLK;
 const uint8_t encoder0PinB = encoderDT;
 
 // --- ENCODER STATE MACHINE ---
@@ -261,6 +261,10 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   }
 }
 
+// --- Encoder switch shift-register debounce ---
+static uint16_t encoderSWDebounce = 0;
+static bool lastSWState = HIGH;
+
 // --- SETUP ---
 void setup()
 {
@@ -310,16 +314,23 @@ void loop()
   }
   lastClear = currentClear;
 
-  static bool lastSW = HIGH;
-  bool currentSW = digitalRead(encoderSW);
-  if (lastSW == HIGH && currentSW == LOW)
+  // Encoder switch shift-register debounce
+  encoderSWDebounce = (encoderSWDebounce << 1) | !digitalRead(encoderSW);
+  bool swDebounced = (encoderSWDebounce == 0xFFFF);
+
+  static bool swHandled = false;
+  if (swDebounced && !swHandled)
   {
     encoderMode = static_cast<EncoderMode>((encoderMode + 1) % encoderModeSize);
     neopixelWrite(ledBuiltIn, 0, 0, 127);
     ledFlashStart = millis();
     ledFlashing = true;
+    swHandled = true;
   }
-  lastSW = currentSW;
+  if (!swDebounced)
+  {
+    swHandled = false;
+  }
 
   unsigned char result = rotary_process();
   static int stepCounter = 0;
@@ -487,7 +498,7 @@ void loop()
     {
       for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
       {
-        sendNoteOff(chordNotesPlaying[i]); // Ensure all notes are off before sending new note-ons
+        sendNoteOff(chordNotesPlaying[i]);                    // Ensure all notes are off before sending new note-ons
         sendNoteOn(chordNotesPlaying[i], chordVelocities[i]); // Send note-on with the corresponding velocity
       }
       chordNoteOnSent = true;
