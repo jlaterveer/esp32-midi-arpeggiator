@@ -1,16 +1,15 @@
 #include <Arduino.h>
 #include <vector>
-// #include <digitalWriteFast.h>
 #include <USB.h>
 #include <USBMIDI.h>
-#include "step_patterns.h" // <-- Add this line to include your step patterns
+#include "step_patterns.h"
 
 // --- CONFIGURATION ---
+// Pin assignments
 const uint8_t midiOutTxPin = 5;
 const uint8_t midiInRxPin = 4;
 const uint8_t ledBuiltIn = 21;
 const uint8_t clearButtonPin = 10;
-
 const uint8_t encoderCLK = 9;
 const uint8_t encoderDT = 8;
 const uint8_t encoderSW = 7;
@@ -18,15 +17,19 @@ const uint8_t encoder0PinA = encoderCLK;
 const uint8_t encoder0PinB = encoderDT;
 
 // --- ENCODER STATE MACHINE ---
+// Rotary encoder state table for quadrature decoding
 const unsigned char ttable[6][4] = {
     {0x3, 0x2, 0x1, 0x0}, {0x23, 0x0, 0x1, 0x0}, {0x13, 0x2, 0x0, 0x0}, {0x3, 0x5, 0x4, 0x0}, {0x3, 0x3, 0x4, 0x10}, {0x3, 0x5, 0x3, 0x20}};
 volatile unsigned char state = 0;
 
+// Initialize rotary encoder pins
 void rotary_init()
 {
   pinMode(encoder0PinA, INPUT_PULLUP);
   pinMode(encoder0PinB, INPUT_PULLUP);
 }
+
+// Process rotary encoder state and return direction
 unsigned char rotary_process()
 {
   unsigned char pinstate = (digitalRead(encoder0PinA) << 1) | digitalRead(encoder0PinB);
@@ -35,6 +38,7 @@ unsigned char rotary_process()
 }
 
 // --- ENCODER MODES ---
+// List of all editable parameters
 enum EncoderMode
 {
   MODE_BPM,
@@ -48,37 +52,40 @@ enum EncoderMode
   MODE_DYNAMICS,
   MODE_HUMANIZE,
   MODE_LENGTH_RANDOMIZE,
-  MODE_BALANCE // Renamed from MODE_BALANCE2
+  MODE_BALANCE
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 12; // unchanged
+const int encoderModeSize = 12;
 
 // --- PARAMETERS ---
-int bpm = 96;                     // Default to 96 BPM
-int noteLengthPercent = 40;       // Default to 40% of the interval
-int noteVelocity = 127;           // Default to maximum velocity
-int octaveRange = 2;              // Default to 2 octaves
-int transpose = 0;                // Default to no transposition
-int velocityDynamicsPercent = 56; // Default to 56% of the maximum range
-bool timingHumanize = false;      // New parameter for timing humanization
-int timingHumanizePercent = 4;    // 0-100% of max allowed humanize
+// All arpeggiator parameters
+int bpm = 96;                     // Beats per minute
+int noteLengthPercent = 40;       // Note length as percent of interval
+int noteVelocity = 127;           // MIDI velocity
+int octaveRange = 2;              // Octave spread
+int transpose = 0;                // Transpose in octaves
+int velocityDynamicsPercent = 56; // Velocity randomization percent
+bool timingHumanize = false;      // Enable timing humanization
+int timingHumanizePercent = 4;    // Humanization percent
 const int maxTimingHumanizePercent = 100;
-int noteLengthRandomizePercent = 20; // 0-100% of max allowed shortening
+int noteLengthRandomizePercent = 20; // Note length randomization percent
 const int maxNoteLengthRandomizePercent = 100;
-int noteBalancePercent = 0; // Renamed from noteBalance2Percent
+int noteBalancePercent = 0; // Note bias percent
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
 
+// Note resolution options (notes per beat)
 const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
 const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
-int notesPerBeatIndex = 3; // Default to 4 notes per beat
+int notesPerBeatIndex = 3; // Default: 4 notes per beat
 int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-int noteRepeat = 2; // Default to 2 repeats
+int noteRepeat = 2; // Number of repeats per note
 int noteRepeatCounter = 0;
-unsigned long arpInterval = 60000 / (bpm * notesPerBeat);
+unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
 
 // --- PATTERNS ---
+// Arpeggiator patterns
 enum ArpPattern
 {
   UP,
@@ -88,21 +95,21 @@ enum ArpPattern
   SQUARE,
   RANDOM,
   PLAYED,
-  CHORD // New pattern
+  CHORD
 };
 ArpPattern currentPattern = PLAYED;
 const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM", "PLAYED", "CHORD"};
-bool ascending = true;
+bool ascending = true; // For TRIANGLE pattern
 const uint8_t sineTable[16] = {0, 1, 2, 4, 6, 8, 10, 12, 15, 12, 10, 8, 6, 4, 2, 1};
 
 // --- STATE ---
+// Chord and note state
 std::vector<uint8_t> currentChord;
 std::vector<uint8_t> tempChord;
 uint8_t leadNote = 0;
 bool capturingChord = false;
 bool chordLatched = false;
 size_t currentNoteIndex = 0;
-unsigned long lastNoteTime = 0;
 bool noteOnActive = false;
 unsigned long noteOnStartTime = 0;
 uint8_t lastPlayedNote = 0;
@@ -115,26 +122,32 @@ const unsigned long ledFlashDuration = 100;
 // --- MIDI I/O ---
 USBMIDI usbMIDI; // USB MIDI object
 
+// Send a single MIDI byte to hardware MIDI out
 void midiSendByte(uint8_t byte)
 {
   Serial2.write(byte);
 }
+
+// Send MIDI note on to both hardware and USB MIDI
 void sendNoteOn(uint8_t note, uint8_t velocity)
 {
   midiSendByte(0x90);
   midiSendByte(note);
   midiSendByte(velocity);
-  usbMIDI.noteOn(note, velocity, 1); // Send to USB MIDI (channel 1)
+  usbMIDI.noteOn(note, velocity, 1); // Channel 1
 }
+
+// Send MIDI note off to both hardware and USB MIDI
 void sendNoteOff(uint8_t note)
 {
   midiSendByte(0x80);
   midiSendByte(note);
   midiSendByte(0);
-  usbMIDI.noteOff(note, 0, 1); // Send to USB MIDI (channel 1)
+  usbMIDI.noteOff(note, 0, 1); // Channel 1
 }
 
 // --- MIDI IN PARSING ---
+// MIDI parser state machine
 enum MidiState
 {
   WaitingStatus,
@@ -144,17 +157,7 @@ enum MidiState
 MidiState midiState = WaitingStatus;
 uint8_t midiStatus, midiData1;
 
-void insertionSort(std::vector<uint8_t> &arr)
-{
-  for (size_t i = 1; i < arr.size(); ++i)
-  {
-    uint8_t key = arr[i];
-    int j = i - 1;
-    while (j >= 0 && arr[j] > key)
-      arr[j + 1] = arr[j--];
-    arr[j + 1] = key;
-  }
-}
+// Handle incoming MIDI note on
 void handleNoteOn(uint8_t note)
 {
   if (!capturingChord)
@@ -167,9 +170,10 @@ void handleNoteOn(uint8_t note)
   if (std::find(tempChord.begin(), tempChord.end(), note) == tempChord.end())
   {
     tempChord.push_back(note);
-    // insertionSort(tempChord);
   }
 }
+
+// Handle incoming MIDI note off
 void handleNoteOff(uint8_t note)
 {
   if (capturingChord && note == leadNote)
@@ -181,6 +185,8 @@ void handleNoteOff(uint8_t note)
     noteRepeatCounter = 0;
   }
 }
+
+// Parse incoming MIDI bytes (hardware MIDI in)
 void readMidiByte(uint8_t byte)
 {
   if (byte & 0x80)
@@ -208,11 +214,10 @@ void readMidiByte(uint8_t byte)
 }
 
 // --- TIMING HUMANIZATION FUNCTION ---
+// Returns a random offset for note timing (ms)
 int getTimingHumanizeOffset(unsigned long noteLengthMs)
 {
-  // Maximum allowed humanize is 1/2 of the note length
   int maxHumanize = noteLengthMs;
-
   int timingHumanizeAmount = (maxHumanize * timingHumanizePercent) / 100;
   if (timingHumanizeAmount == 0)
     return 0;
@@ -220,11 +225,10 @@ int getTimingHumanizeOffset(unsigned long noteLengthMs)
 }
 
 // --- NOTE LENGTH RANDOMIZATION FUNCTION ---
+// Returns a randomized note length (ms)
 unsigned long getRandomizedNoteLength(unsigned long noteLengthMs)
 {
-  // Maximum allowed shortening is 1/2 of the note length
   unsigned long maxShorten = noteLengthMs;
-  ;
   unsigned long shortenAmount = (maxShorten * noteLengthRandomizePercent) / 100;
   if (shortenAmount == 0)
     return noteLengthMs;
@@ -242,18 +246,15 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   size_t chordSize = chord.size();
   uint8_t targetNote = (percent < 0) ? chord.front() : chord.back();
   int absPercent = abs(percent);
-  // Number of notes to replace (not counting the already lowest/highest)
   size_t numToReplace = (chordSize > 1) ? ((chordSize * absPercent + 99) / 100) : 0;
   if (numToReplace == 0)
     return;
-  // Build a list of indices to potentially replace (excluding the first/last if already target)
   std::vector<size_t> indices;
   for (size_t i = 0; i < chordSize; ++i)
   {
     if (chord[i] != targetNote)
       indices.push_back(i);
   }
-  // Shuffle and pick indices to replace
   std::random_shuffle(indices.begin(), indices.end());
   for (size_t i = 0; i < numToReplace && i < indices.size(); ++i)
   {
@@ -262,10 +263,11 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
 }
 
 // --- Encoder switch shift-register debounce ---
+// Debounce state for encoder switch
 static uint16_t encoderSWDebounce = 0;
-static bool lastSWState = HIGH;
 
 // --- SETUP ---
+// Initialize all hardware and state
 void setup()
 {
   pinMode(ledBuiltIn, OUTPUT);
@@ -278,13 +280,14 @@ void setup()
   while (!Serial && millis() - serialStart < 3000)
   {
     delay(10);
-  } // Wait for Serial to be ready (important for USB CDC), timeout after 3 seconds
+  }
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN
   Serial2.begin(31250, SERIAL_8N1, -1, midiOutTxPin); // MIDI OUT
 
   USB.begin();
   usbMIDI.begin();
 
+  // Preload a chord for startup
   capturingChord = true;
   tempChord.clear();
   leadNote = 48;
@@ -296,10 +299,12 @@ void setup()
 }
 
 // --- LOOP ---
+// Main loop: handle input, arpeggiator, and output
 void loop()
 {
   unsigned long now = millis();
 
+  // --- Clear button handling ---
   static bool lastClear = HIGH;
   bool currentClear = digitalRead(clearButtonPin);
   if (lastClear == HIGH && currentClear == LOW)
@@ -314,7 +319,7 @@ void loop()
   }
   lastClear = currentClear;
 
-  // Encoder switch shift-register debounce
+  // --- Encoder switch shift-register debounce ---
   encoderSWDebounce = (encoderSWDebounce << 1) | !digitalRead(encoderSW);
   bool swDebounced = (encoderSWDebounce == 0xFFFF);
 
@@ -332,6 +337,7 @@ void loop()
     swHandled = false;
   }
 
+  // --- Rotary encoder processing ---
   unsigned char result = rotary_process();
   static int stepCounter = 0;
   int delta = 0;
@@ -345,6 +351,7 @@ void loop()
     stepCounter = 0;
   }
 
+  // --- Parameter adjustment via encoder ---
   if (delta != 0)
   {
     switch (encoderMode)
@@ -362,7 +369,7 @@ void loop()
       octaveRange = constrain(octaveRange + delta, minOctave, maxOctave);
       break;
     case MODE_PATTERN:
-      currentPattern = static_cast<ArpPattern>((currentPattern + delta + 8) % 8); // Now 8 patterns
+      currentPattern = static_cast<ArpPattern>((currentPattern + delta + 8) % 8);
       break;
     case MODE_RESOLUTION:
       notesPerBeatIndex = constrain(notesPerBeatIndex + delta, 0, notesPerBeatOptionsSize - 1);
@@ -391,14 +398,14 @@ void loop()
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
 
+  // --- MIDI IN (hardware) ---
   while (Serial1.available())
     readMidiByte(Serial1.read());
 
-  // USB MIDI IN (packet-based)
+  // --- MIDI IN (USB) ---
   midiEventPacket_t packet;
   while (usbMIDI.readPacket(&packet))
   {
-    // MIDI message type is in the upper nibble of packet.header
     uint8_t cin = packet.header & 0x0F;
     switch (cin)
     {
@@ -406,18 +413,18 @@ void loop()
       if (packet.byte3 > 0)
         handleNoteOn(packet.byte2);
       else
-        handleNoteOff(packet.byte2); // Note On with velocity 0 = Note Off
+        handleNoteOff(packet.byte2);
       break;
     case 0x08: // Note Off
       handleNoteOff(packet.byte2);
       break;
-      // You can add more MIDI message handling here if needed
     }
   }
 
+  // --- Chord processing ---
   std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
 
-  // Remove duplicates, preserving order for PLAYED
+  // Remove duplicates, preserving order for PLAYED pattern
   std::vector<uint8_t> playedChord;
   for (uint8_t note : baseChord)
   {
@@ -449,32 +456,29 @@ void loop()
   // --- Apply note bias based on noteBalancePercent ---
   applyNoteBiasToChord(playingChord, noteBalancePercent);
 
-  static int timingOffset = 0;           // Store offset for current note
-  static unsigned long nextNoteTime = 0; // Track next note's scheduled time
+  // --- Arpeggiator timing and note scheduling ---
+  static int timingOffset = 0;
+  static unsigned long nextNoteTime = 0;
 
   unsigned long noteLengthMs = arpInterval * noteLengthPercent / 100;
-  // --- Apply note length randomization ---
   unsigned long randomizedNoteLengthMs = getRandomizedNoteLength(noteLengthMs);
 
-  // Ensure nextNoteTime is initialized on first run
   if (nextNoteTime == 0)
     nextNoteTime = now;
 
-  uint8_t velocityToSend = noteVelocity; // Declare velocityToSend outside the block
+  uint8_t velocityToSend = noteVelocity;
 
-  // --- CHORD pattern state ---
+  // --- CHORD pattern: play all notes together ---
   static bool chordNotesOn = false;
   static std::vector<uint8_t> chordNotesPlaying;
-  static std::vector<uint8_t> chordVelocities; // Store per-note velocities
+  static std::vector<uint8_t> chordVelocities;
 
   if (currentPattern == CHORD)
   {
-    // Play all notes together at every beat, with repeats and all parameters
     if (!chordNotesOn && !playingChord.empty() && now >= nextNoteTime)
     {
       chordNotesPlaying = playingChord;
       chordVelocities.clear();
-      // Calculate and store velocity for each note
       for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
       {
         uint8_t v = noteVelocity;
@@ -492,18 +496,16 @@ void loop()
       noteRepeatCounter = 0;
       nextNoteTime += arpInterval;
     }
-    // Actually send note-on when the humanized time arrives
     static bool chordNoteOnSent = false;
     if (chordNotesOn && !chordNoteOnSent && now >= noteOnStartTime)
     {
       for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
       {
-        sendNoteOff(chordNotesPlaying[i]);                    // Ensure all notes are off before sending new note-ons
-        sendNoteOn(chordNotesPlaying[i], chordVelocities[i]); // Send note-on with the corresponding velocity
+        sendNoteOff(chordNotesPlaying[i]);
+        sendNoteOn(chordNotesPlaying[i], chordVelocities[i]);
       }
       chordNoteOnSent = true;
     }
-    // Note-off after note length + humanize offset
     if (chordNotesOn && chordNoteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
     {
       for (uint8_t note : chordNotesPlaying)
@@ -527,14 +529,12 @@ void loop()
   else
   {
     // --- Note selection with balance ---
-    // Helper lambda to bias note index based on noteBalancePercent
     auto getBalancedNoteIndex = [&](size_t chordSize, size_t step) -> size_t
     {
       if (chordSize <= 1)
       {
         return step % chordSize;
       }
-
       size_t idx = step % chordSize;
       return constrain(idx, 0, chordSize - 1);
     };
@@ -581,26 +581,19 @@ void loop()
       int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
       lastPlayedNote = transposedNote;
 
-      // Apply velocity dynamics as a percentage
-      velocityToSend = noteVelocity; // Ensure this variable is declared earlier
+      velocityToSend = noteVelocity;
       if (velocityDynamicsPercent > 0)
       {
         int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
         velocityToSend = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
       }
 
-      // Calculate timing offset if enabled
       timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
-
-      // Schedule note-on with humanize offset
       noteOnStartTime = now + timingOffset;
       noteOnActive = true;
-
-      // Schedule the next note strictly at the next interval (no humanize offset)
       nextNoteTime += arpInterval;
     }
 
-    // Actually send note-on when the humanized time arrives
     static bool noteOnSent = false;
     if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
     {
@@ -608,7 +601,6 @@ void loop()
       noteOnSent = true;
     }
 
-    // Note-off after note length + humanize offset
     if (noteOnActive && noteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
     {
       sendNoteOff(lastPlayedNote);
@@ -646,12 +638,14 @@ void loop()
     }
   }
 
+  // --- LED flash timing ---
   if (ledFlashing && now - ledFlashStart >= ledFlashDuration)
   {
     neopixelWrite(ledBuiltIn, 0, 0, 0);
     ledFlashing = false;
   }
 
+  // --- Serial debug output for parameter changes ---
   static int lastBPM = bpm, lastLength = noteLengthPercent, lastVelocity = noteVelocity, lastOctave = octaveRange;
   static int lastResolutionIndex = notesPerBeatIndex, lastNoteRepeat = noteRepeat, lastTranspose = transpose;
   static ArpPattern lastPattern = currentPattern;
