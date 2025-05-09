@@ -274,6 +274,13 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
 // Debounce state for encoder switch
 static uint16_t encoderSWDebounce = 0;
 
+// --- Add storage for loaded step patterns from EEPROM ---
+std::vector<std::vector<std::vector<uint8_t>>> allStepPatternGroups;
+
+// --- Pattern permutation selection state ---
+int permutationIndex = 0;
+int availablePatternCount = 0;
+
 // --- SETUP ---
 // Initialize all hardware and state
 void setup()
@@ -300,7 +307,7 @@ void setup()
   // --- EEPROM: Generate and store all step patterns if not already done ---
   EEPROM.begin(EEPROM_SIZE);
 
-    // Use the last byte as a flag to check if EEPROM is initialized
+  // Use the last byte as a flag to check if EEPROM is initialized
   if (EEPROM.read(EEPROM_SIZE - 1) != 0xA5) {
     writeAllStepPatternsToEEPROM();
     EEPROM.write(EEPROM_SIZE - 1, 0xA5);
@@ -309,6 +316,9 @@ void setup()
   } else {
     Serial.println("Step patterns already in EEPROM.");
   }
+
+  // --- Load all step patterns from EEPROM into RAM for fast access ---
+  readAllStepPatternsFromEEPROM(allStepPatternGroups);
 
   capturingChord = true;
   tempChord.clear();
@@ -460,18 +470,102 @@ void loop()
   std::vector<uint8_t> orderedChord = playedChord;
   std::sort(orderedChord.begin(), orderedChord.end());
 
-  // Build the playingChord with octave shifts and no duplicates
-  std::vector<uint8_t> playingChord;
-  const std::vector<uint8_t> &chordSource = (currentPattern == PLAYED) ? playedChord : orderedChord;
-  for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
-  {
-    if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
-      continue;
-    for (uint8_t note : chordSource)
+  // --- Select available step patterns from EEPROM based on chord size ---
+  std::vector<std::vector<uint8_t>> availablePatterns;
+  int chordSize = orderedChord.size();
+  if (chordSize >= MIN_STEPS && chordSize <= MAX_STEPS) {
+    availablePatterns = allStepPatternGroups[chordSize - MIN_STEPS];
+    availablePatternCount = availablePatterns.size();
+    // Clamp permutationIndex if chord size changes
+    if (permutationIndex >= availablePatternCount) permutationIndex = 0;
+  } else {
+    availablePatterns.clear();
+    availablePatternCount = 0;
+    permutationIndex = 0;
+  }
+
+  // --- Encoder logic for selecting permutation pattern when in MODE_PATTERN ---
+  static int lastPatternDelta = 0;
+  static int lastChordSize = 0;
+  static EncoderMode lastPatternMode = encoderMode;
+
+  // Only allow permutation selection in MODE_PATTERN and for valid patterns
+  if (encoderMode == MODE_PATTERN && availablePatternCount > 0) {
+    // Use the rotary encoder to change permutationIndex
+    int patternDelta = 0;
+    static int patternStepCounter = 0;
+    unsigned char result = rotary_process();
+    if (result == 0x10)
+      patternStepCounter++;
+    else if (result == 0x20)
+      patternStepCounter--;
+    if (abs(patternStepCounter) >= 2)
     {
-      int shifted = note + 12 * oct;
-      if (shifted >= 0 && shifted <= 127 && std::find(playingChord.begin(), playingChord.end(), shifted) == playingChord.end())
-        playingChord.push_back(shifted);
+      patternDelta = (patternStepCounter > 0) ? 1 : -1;
+      patternStepCounter = 0;
+    }
+
+    // Only update permutationIndex if encoder is in MODE_PATTERN
+    if (patternDelta != 0) {
+      permutationIndex += patternDelta;
+      if (permutationIndex < 0) permutationIndex = availablePatternCount - 1;
+      if (permutationIndex >= availablePatternCount) permutationIndex = 0;
+      Serial.print("Permutation index: ");
+      Serial.print(permutationIndex);
+      Serial.print(" / ");
+      Serial.println(availablePatternCount - 1);
+    }
+
+    // Reset permutationIndex if chord size changes or mode changes
+    if (chordSize != lastChordSize || encoderMode != lastPatternMode) {
+      permutationIndex = 0;
+    }
+    lastChordSize = chordSize;
+    lastPatternMode = encoderMode;
+  } else {
+    permutationIndex = 0;
+  }
+
+  // --- Use the selected permutation pattern ---
+  std::vector<uint8_t> permutationPattern;
+  if (!availablePatterns.empty()) {
+    permutationPattern = availablePatterns[permutationIndex];
+  } else {
+    permutationPattern.clear();
+  }
+
+  // --- Build the playingChord with octave shifts and no duplicates, using permutation if desired ---
+  std::vector<uint8_t> playingChord;
+  const std::vector<uint8_t> &chordSource =
+      (currentPattern == PLAYED) ? playedChord : orderedChord;
+
+  if (currentPattern == PLAYED || permutationPattern.empty()) {
+    // Default: use playedChord or orderedChord as before
+    for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
+    {
+      if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
+        continue;
+      for (uint8_t note : chordSource)
+      {
+        int shifted = note + 12 * oct;
+        if (shifted >= 0 && shifted <= 127 && std::find(playingChord.begin(), playingChord.end(), shifted) == playingChord.end())
+          playingChord.push_back(shifted);
+      }
+    }
+  } else {
+    // Use the permutation pattern from EEPROM to order the notes
+    for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
+    {
+      if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
+        continue;
+      for (uint8_t idx : permutationPattern)
+      {
+        if (idx < chordSource.size()) {
+          int shifted = chordSource[idx] + 12 * oct;
+          if (shifted >= 0 && shifted <= 127 && std::find(playingChord.begin(), playingChord.end(), shifted) == playingChord.end())
+            playingChord.push_back(shifted);
+        }
+      }
     }
   }
 
@@ -513,8 +607,8 @@ void loop()
       }
       timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
       noteOnStartTime = now + timingOffset;
-      chordNotesOn = true;
       noteOnActive = true;
+      chordNotesOn = true;
       noteRepeatCounter = 0;
       nextNoteTime += arpInterval;
     }
