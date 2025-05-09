@@ -5,6 +5,46 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 
+/*
+// --- STEP PATTERN CONSTANTS ---
+// These must be defined before including this header in your main.cpp
+#ifndef MIN_STEPS
+#define MIN_STEPS 2
+#endif
+#ifndef MAX_STEPS
+#define MAX_STEPS 6
+#endif
+*/
+
+// Calculate the number of permutations for n steps (n!)
+constexpr int factorial(int n)
+{
+    return (n <= 1) ? 1 : n * factorial(n - 1);
+}
+
+// --- Helper: Calculate required EEPROM size for all step patterns ---
+void printEEPROMUsageForStepPatterns()
+{
+    int totalBytes = 0;
+    for (int n = MIN_STEPS; n <= MAX_STEPS; ++n)
+    {
+        int numPatterns = factorial(n);
+        int bytesForGroup = numPatterns * n;
+        Serial.printf("Patterns for %d steps: %d patterns, %d bytes\n", n, numPatterns, bytesForGroup);
+        totalBytes += bytesForGroup;
+    }
+    Serial.printf("Total EEPROM bytes required for all step patterns: %d\n", totalBytes);
+    Serial.printf("Configured EEPROM_SIZE: %d\n", EEPROM_SIZE);
+    if (totalBytes + 1 > EEPROM_SIZE)
+    {
+        Serial.println("WARNING: EEPROM_SIZE is NOT large enough for all step patterns!");
+    }
+    else
+    {
+        Serial.println("EEPROM_SIZE is sufficient for all step patterns.");
+    }
+}
+
 // Utility function to generate all permutations for n steps
 inline void generateStepPermutations(int n, std::vector<std::vector<int>> &out)
 {
@@ -22,7 +62,7 @@ inline void generateStepPermutations(int n, std::vector<std::vector<int>> &out)
 inline std::vector<std::vector<std::vector<int>>> buildAllStepPatternGroups()
 {
     std::vector<std::vector<std::vector<int>>> groups;
-    for (int n = 2; n <= 6; ++n)
+    for (int n = MIN_STEPS; n <= MAX_STEPS; ++n)
     {
         std::vector<std::vector<int>> group;
         generateStepPermutations(n, group);
@@ -31,15 +71,7 @@ inline std::vector<std::vector<std::vector<int>>> buildAllStepPatternGroups()
     return groups;
 }
 
-// Define the maximum number of steps and patterns per group (adjust as needed)
-constexpr int MIN_STEPS = 2;
-constexpr int MAX_STEPS = 6;
 
-// Calculate the number of permutations for n steps (n!)
-constexpr int factorial(int n)
-{
-    return (n <= 1) ? 1 : n * factorial(n - 1);
-}
 
 // EEPROM layout: patterns are stored sequentially for each group (2..6 steps)
 constexpr int EEPROM_PATTERN_ADDR = 0; // Start address
@@ -88,6 +120,18 @@ inline void readAllStepPatternsFromEEPROM(std::vector<std::vector<std::vector<ui
         allGroups.push_back(group);
     }
 }
+
+// "inline void" vs "void":
+// - "inline" is a suggestion to the compiler to insert the function's code at each call site, instead of making a regular function call.
+// - For functions defined in headers (especially templates or small utility functions), "inline" avoids multiple definition linker errors when included in multiple translation units.
+// - "void" (without "inline") is a normal function declaration/definition; if defined in a header and included in multiple .cpp files, it can cause linker errors due to multiple definitions.
+// - For non-template, non-static functions in headers, always use "inline" if you define them in the header.
+
+//
+// Example:
+//   inline void foo() {}   // Safe in header
+//   void foo() {}          // Not safe in header (unless static or in an anonymous namespace)
+//
 
 // Example usage:
 // EEPROM.begin(EEPROM_SIZE); // Call in setup, EEPROM_SIZE must be large enough
