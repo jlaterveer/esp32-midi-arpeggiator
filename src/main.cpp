@@ -700,6 +700,10 @@ void loop()
   }
   if (encoderMode == MODE_PATTERN && currentPattern != lastPattern)
   {
+    // --- Send note off for all possible notes in playingChord when switching pattern ---
+    for (uint8_t note : playingChord) {
+      sendNoteOff(note);
+    }
     Serial.print("Pattern: ");
     Serial.println(patternNames[currentPattern]);
     lastPattern = currentPattern;
