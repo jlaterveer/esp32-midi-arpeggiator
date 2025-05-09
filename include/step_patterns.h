@@ -71,39 +71,98 @@ inline std::vector<std::vector<std::vector<int>>> buildAllStepPatternGroups()
     return groups;
 }
 
-
-
 // EEPROM layout: patterns are stored sequentially for each group (2..6 steps)
-constexpr int EEPROM_PATTERN_ADDR = 0; // Start address
+// We add an address table at the start of EEPROM to store the start address of each pattern group.
+// The address table is written once during pattern generation and used for fast lookup.
 
-// Write all step patterns to EEPROM (call once to initialize, e.g. from setup)
+constexpr int EEPROM_ADDR_TABLE_START = 0; // Start address for address table
+constexpr int MAX_GROUPS = MAX_STEPS - MIN_STEPS + 1;
+
+// Helper to compute factorial at runtime
+inline int factorial_rt(int n)
+{
+    int r = 1;
+    for (int i = 2; i <= n; ++i)
+        r *= i;
+    return r;
+}
+
+// Write all step patterns and address table to EEPROM
 inline void writeAllStepPatternsToEEPROM()
 {
-    int addr = EEPROM_PATTERN_ADDR;
-    for (int n = MIN_STEPS; n <= MAX_STEPS; ++n)
+    int addrTable[MAX_GROUPS];
+    int addr = EEPROM_ADDR_TABLE_START + MAX_GROUPS * sizeof(int); // Reserve space for address table
+
+    // Write patterns and record group start addresses
+    for (int group = 0, n = MIN_STEPS; n <= MAX_STEPS; ++n, ++group)
     {
-        std::vector<std::vector<int>> group;
-        // Generate all permutations for n steps
+        addrTable[group] = addr;
         std::vector<int> perm(n);
         for (int i = 0; i < n; ++i)
             perm[i] = i;
         do
         {
-            // Write each pattern to EEPROM
             for (int i = 0; i < n; ++i)
             {
                 EEPROM.write(addr++, perm[i]);
             }
         } while (std::next_permutation(perm.begin(), perm.end()));
     }
+
+    // Write address table at the start of EEPROM
+    int tableAddr = EEPROM_ADDR_TABLE_START;
+    for (int group = 0; group < MAX_GROUPS; ++group)
+    {
+        int val = addrTable[group];
+        for (int b = 0; b < 4; ++b)
+        {
+            EEPROM.write(tableAddr++, (val >> (b * 8)) & 0xFF);
+        }
+    }
     EEPROM.commit();
+}
+
+// Helper to read group start address from EEPROM address table
+inline int readPatternGroupStartAddr(int chordSize)
+{
+    int group = chordSize - MIN_STEPS;
+    int addr = EEPROM_ADDR_TABLE_START + group * sizeof(int);
+    int val = 0;
+    for (int b = 0; b < 4; ++b)
+    {
+        val |= (EEPROM.read(addr + b) << (b * 8));
+    }
+    return val;
+}
+
+// Read a single pattern directly from EEPROM using the address table
+inline void readPatternFromEEPROM(int chordSize, int patternIndex, std::vector<uint8_t> &pattern)
+{
+    if (chordSize < MIN_STEPS || chordSize > MAX_STEPS)
+    {
+        pattern.clear();
+        return;
+    }
+    int numPatterns = factorial_rt(chordSize);
+    if (patternIndex < 0 || patternIndex >= numPatterns)
+    {
+        pattern.clear();
+        return;
+    }
+    int groupStart = readPatternGroupStartAddr(chordSize);
+    int addr = groupStart + patternIndex * chordSize;
+    pattern.clear();
+    for (int i = 0; i < chordSize; ++i)
+    {
+        pattern.push_back(EEPROM.read(addr + i));
+    }
 }
 
 // Read all step patterns from EEPROM into a nested vector structure
 inline void readAllStepPatternsFromEEPROM(std::vector<std::vector<std::vector<uint8_t>>> &allGroups)
 {
     allGroups.clear();
-    int addr = EEPROM_PATTERN_ADDR;
+    int addr = EEPROM_ADDR_TABLE_START + MAX_GROUPS * sizeof(int); // Skip address table
     for (int n = MIN_STEPS; n <= MAX_STEPS; ++n)
     {
         int numPatterns = factorial(n);
@@ -120,18 +179,6 @@ inline void readAllStepPatternsFromEEPROM(std::vector<std::vector<std::vector<ui
         allGroups.push_back(group);
     }
 }
-
-// "inline void" vs "void":
-// - "inline" is a suggestion to the compiler to insert the function's code at each call site, instead of making a regular function call.
-// - For functions defined in headers (especially templates or small utility functions), "inline" avoids multiple definition linker errors when included in multiple translation units.
-// - "void" (without "inline") is a normal function declaration/definition; if defined in a header and included in multiple .cpp files, it can cause linker errors due to multiple definitions.
-// - For non-template, non-static functions in headers, always use "inline" if you define them in the header.
-
-//
-// Example:
-//   inline void foo() {}   // Safe in header
-//   void foo() {}          // Not safe in header (unless static or in an anonymous namespace)
-//
 
 // Example usage:
 // EEPROM.begin(EEPROM_SIZE); // Call in setup, EEPROM_SIZE must be large enough
