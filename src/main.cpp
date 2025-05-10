@@ -54,6 +54,7 @@ enum EncoderMode
   MODE_VELOCITY,
   MODE_OCTAVE,
   MODE_PATTERN,
+  MODE_PATTERN_PLAYBACK, // <-- Add this line
   MODE_RESOLUTION,
   MODE_REPEAT,
   MODE_TRANSPOSE,
@@ -63,7 +64,15 @@ enum EncoderMode
   MODE_BALANCE
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 12;
+const int encoderModeSize = 13; // <-- Update to match new mode count
+
+// --- STRAIGHT/LOOP mode for pattern playback ---
+enum PatternPlaybackMode
+{
+  STRAIGHT,
+  LOOP
+};
+PatternPlaybackMode patternPlaybackMode = STRAIGHT;
 
 // --- PARAMETERS ---
 // All arpeggiator parameters
@@ -776,6 +785,26 @@ void loop()
     swHandled = false;
   }
 
+  // --- Add encoder switch for STRAIGHT/LOOP toggle ---
+  // Use encoderSW long press to toggle patternPlaybackMode
+  static unsigned long encoderSWPressTime = 0;
+  static bool encoderSWPrev = false;
+  bool encoderSWNow = !digitalRead(encoderSW);
+  if (encoderSWNow && !encoderSWPrev)
+  {
+    encoderSWPressTime = millis();
+  }
+  if (!encoderSWNow && encoderSWPrev)
+  {
+    if (millis() - encoderSWPressTime > 500) // long press
+    {
+      patternPlaybackMode = (patternPlaybackMode == STRAIGHT) ? LOOP : STRAIGHT;
+      Serial.print("Pattern Playback Mode: ");
+      Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
+    }
+  }
+  encoderSWPrev = encoderSWNow;
+
   // --- Rotary encoder processing ---
   unsigned char result = rotary_process();
   static int stepCounter = 0;
@@ -831,14 +860,22 @@ void loop()
         {
           pat = customPatternFuncs[selectedPatternIndex](n);
         }
-        for (size_t i = 0; i < pat.size(); ++i)
+        // Apply LOOP mode preview
+        std::vector<uint8_t> patPreview = pat;
+        if (patternPlaybackMode == LOOP && pat.size() > 2)
         {
-          Serial.print((int)pat[i]);
-          if (i < pat.size() - 1)
+          for (int i = pat.size() - 2; i > 0; --i)
+            patPreview.push_back(pat[i]);
+        }
+        for (size_t i = 0; i < patPreview.size(); ++i)
+        {
+          Serial.print((int)patPreview[i]);
+          if (i < patPreview.size() - 1)
             Serial.print(",");
         }
       }
-      Serial.println("]");
+      Serial.print("] ");
+      Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
       break;
     case MODE_RESOLUTION:
       notesPerBeatIndex = constrain(notesPerBeatIndex + delta, 0, notesPerBeatOptionsSize - 1);
@@ -862,6 +899,11 @@ void loop()
       break;
     case MODE_BALANCE:
       noteBalancePercent = constrain(noteBalancePercent + delta * 10, -100, 100);
+      break;
+    case MODE_PATTERN_PLAYBACK:
+      patternPlaybackMode = (patternPlaybackMode == STRAIGHT) ? LOOP : STRAIGHT;
+      Serial.print("Pattern Playback Mode: ");
+      Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -918,12 +960,20 @@ void loop()
     patternIndices = patternUp(orderedChord.size());
   }
 
+  // Apply LOOP mode to patternIndices
+  std::vector<uint8_t> patternIndicesFinal = patternIndices;
+  if (patternPlaybackMode == LOOP && patternIndices.size() > 2)
+  {
+    for (int i = patternIndices.size() - 2; i > 0; --i)
+      patternIndicesFinal.push_back(patternIndices[i]);
+  }
+
   std::vector<uint8_t> playingChord;
   for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
   {
     if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
       continue;
-    for (uint8_t idx : patternIndices)
+    for (uint8_t idx : patternIndicesFinal)
     {
       if (selectedPatternIndex == PAT_ASPLAYED)
       {
@@ -1246,6 +1296,9 @@ void loop()
       break;
     case MODE_PATTERN:
       Serial.println("Pattern");
+      break;
+    case MODE_PATTERN_PLAYBACK:
+      Serial.println("Pattern Playback Mode");
       break;
     case MODE_RESOLUTION:
       Serial.println("Notes Per Beat");
