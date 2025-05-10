@@ -377,6 +377,69 @@ std::vector<uint8_t> patternStaggeredRise(int n) {
     return v;
 }
 
+std::vector<uint8_t> patternAsPlayed(int n, const std::vector<uint8_t>& playedOrder) {
+    std::vector<uint8_t> v;
+    for (int i = 0; i < n; ++i) v.push_back(i);
+    return v;
+}
+
+// --- Pattern selection state for MODE_PATTERN ---
+enum CustomPattern {
+  PAT_UP,
+  PAT_DOWN,
+  PAT_UPDOWN,
+  PAT_DOWNUP,
+  PAT_OUTERIN,
+  PAT_INWARDBOUNCE,
+  PAT_ZIGZAG,
+  PAT_SPIRAL,
+  PAT_MIRROR,
+  PAT_SAW,
+  PAT_SAWREVERSE,
+  PAT_BOUNCE,
+  PAT_REVERSEBOUNCE,
+  PAT_LADDER,
+  PAT_SKIPUP,
+  PAT_JUMPSTEP,
+  PAT_CROSSOVER,
+  PAT_RANDOM,
+  PAT_EVENODD,
+  PAT_ODDEVEN,
+  PAT_EDGELOOP,
+  PAT_CENTERBOUNCE,
+  PAT_UPDOUBLE,
+  PAT_SKIPREVERSE,
+  PAT_SNAKE,
+  PAT_PENDULUM,
+  PAT_ASYMMETRICLOOP,
+  PAT_SHORTLONG,
+  PAT_BACKWARDJUMP,
+  PAT_INSIDEBOUNCE,
+  PAT_STAGGEREDRISE,
+  PAT_ASPLAYED,
+  PAT_COUNT // must be last
+};
+
+const char* customPatternNames[PAT_COUNT] = {
+  "Up", "Down", "Up-Down", "Down-Up", "Outer-In", "Inward Bounce", "Zigzag", "Spiral", "Mirror", "Saw", "Saw Reverse",
+  "Bounce", "Reverse Bounce", "Ladder", "Skip Up", "Jump Step", "Crossover", "Random", "Even-Odd", "Odd-Even",
+  "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
+  "Backward Jump", "Inside Bounce", "Staggered Rise", "As Played"
+};
+
+// Pattern generator function pointers (except AsPlayed, which is handled specially)
+typedef std::vector<uint8_t> (*PatternGen)(int);
+PatternGen customPatternFuncs[PAT_COUNT - 1] = {
+  patternUp, patternDown, patternUpDown, patternDownUp, patternOuterIn, patternInwardBounce, patternZigzag, patternSpiral,
+  patternMirror, patternSaw, patternSawReverse, patternBounce, patternReverseBounce, patternLadder, patternSkipUp,
+  patternJumpStep, patternCrossover, patternRandom, patternEvenOdd, patternOddEven, patternEdgeLoop, patternCenterBounce,
+  patternUpDouble, patternSkipReverse, patternSnake, patternPendulum, patternAsymmetricLoop, patternShortLong,
+  patternBackwardJump, patternInsideBounce, patternStaggeredRise
+};
+
+// --- Pattern selection index for MODE_PATTERN ---
+int selectedPatternIndex = 0;
+
 // --- STATE ---
 // Chord and note state
 std::vector<uint8_t> currentChord;
@@ -658,7 +721,33 @@ void loop()
       octaveRange = constrain(octaveRange + delta, minOctave, maxOctave);
       break;
     case MODE_PATTERN:
-      currentPattern = static_cast<ArpPattern>((currentPattern + delta + 8) % 8);
+      selectedPatternIndex += delta;
+      if (selectedPatternIndex < 0) selectedPatternIndex = PAT_COUNT - 1;
+      if (selectedPatternIndex >= PAT_COUNT) selectedPatternIndex = 0;
+      Serial.print("Pattern: ");
+      Serial.print(customPatternNames[selectedPatternIndex]);
+      Serial.print(" [");
+      {
+        std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
+        std::vector<uint8_t> playedChord;
+        for (uint8_t note : baseChord)
+          if (std::find(playedChord.begin(), playedChord.end(), note) == playedChord.end())
+            playedChord.push_back(note);
+        std::vector<uint8_t> orderedChord = playedChord;
+        std::sort(orderedChord.begin(), orderedChord.end());
+        int n = (selectedPatternIndex == PAT_ASPLAYED) ? playedChord.size() : orderedChord.size();
+        std::vector<uint8_t> pat;
+        if (selectedPatternIndex == PAT_ASPLAYED) {
+          pat = patternAsPlayed(n, playedChord);
+        } else {
+          pat = customPatternFuncs[selectedPatternIndex](n);
+        }
+        for (size_t i = 0; i < pat.size(); ++i) {
+          Serial.print((int)pat[i]);
+          if (i < pat.size() - 1) Serial.print(",");
+        }
+      }
+      Serial.println("]");
       break;
     case MODE_RESOLUTION:
       notesPerBeatIndex = constrain(notesPerBeatIndex + delta, 0, notesPerBeatOptionsSize - 1);
@@ -727,18 +816,38 @@ void loop()
   std::vector<uint8_t> orderedChord = playedChord;
   std::sort(orderedChord.begin(), orderedChord.end());
 
-  // Build the playingChord with octave shifts and no duplicates
+  // --- Build the playingChord with octave shifts and no duplicates using selected pattern
+  std::vector<uint8_t> patternIndices;
+  if (encoderMode == MODE_PATTERN && selectedPatternIndex >= 0 && selectedPatternIndex < PAT_COUNT) {
+    if (selectedPatternIndex == PAT_ASPLAYED) {
+      patternIndices = patternAsPlayed(playedChord.size(), playedChord);
+    } else {
+      patternIndices = customPatternFuncs[selectedPatternIndex](orderedChord.size());
+    }
+  } else {
+    patternIndices = patternUp(orderedChord.size());
+  }
+
   std::vector<uint8_t> playingChord;
-  const std::vector<uint8_t> &chordSource = (currentPattern == PLAYED) ? playedChord : orderedChord;
   for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
   {
     if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
       continue;
-    for (uint8_t note : chordSource)
+    for (uint8_t idx : patternIndices)
     {
-      int shifted = note + 12 * oct;
-      if (shifted >= 0 && shifted <= 127 && std::find(playingChord.begin(), playingChord.end(), shifted) == playingChord.end())
-        playingChord.push_back(shifted);
+      if (selectedPatternIndex == PAT_ASPLAYED) {
+        if (idx < playedChord.size()) {
+          int shifted = playedChord[idx] + 12 * oct;
+          if (shifted >= 0 && shifted <= 127 && std::find(playingChord.begin(), playingChord.end(), shifted) == playingChord.end())
+            playingChord.push_back(shifted);
+        }
+      } else {
+        if (idx < orderedChord.size()) {
+          int shifted = orderedChord[idx] + 12 * oct;
+          if (shifted >= 0 && shifted <= 127 && std::find(playingChord.begin(), playingChord.end(), shifted) == playingChord.end())
+            playingChord.push_back(shifted);
+        }
+      }
     }
   }
 
