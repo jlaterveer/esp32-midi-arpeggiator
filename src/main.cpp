@@ -54,7 +54,8 @@ enum EncoderMode
   MODE_VELOCITY,
   MODE_OCTAVE,
   MODE_PATTERN,
-  MODE_PATTERN_PLAYBACK, // <-- Add this line
+  MODE_PATTERN_PLAYBACK,
+  MODE_REVERSE, // <-- Add this line
   MODE_RESOLUTION,
   MODE_REPEAT,
   MODE_TRANSPOSE,
@@ -64,7 +65,7 @@ enum EncoderMode
   MODE_BALANCE
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 13; // <-- Update to match new mode count
+const int encoderModeSize = 14; // <-- Update to match new mode count
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -73,6 +74,9 @@ enum PatternPlaybackMode
   LOOP
 };
 PatternPlaybackMode patternPlaybackMode = STRAIGHT;
+
+// --- REVERSE mode for pattern playback ---
+bool patternReverse = false;
 
 // --- PARAMETERS ---
 // All arpeggiator parameters
@@ -867,6 +871,11 @@ void loop()
           for (int i = pat.size() - 2; i > 0; --i)
             patPreview.push_back(pat[i]);
         }
+        // Apply REVERSE mode preview
+        if (patternReverse && !patPreview.empty())
+        {
+          std::reverse(patPreview.begin(), patPreview.end());
+        }
         for (size_t i = 0; i < patPreview.size(); ++i)
         {
           Serial.print((int)patPreview[i]);
@@ -904,6 +913,11 @@ void loop()
       patternPlaybackMode = (patternPlaybackMode == STRAIGHT) ? LOOP : STRAIGHT;
       Serial.print("Pattern Playback Mode: ");
       Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
+      break;
+    case MODE_REVERSE:
+      patternReverse = !patternReverse;
+      Serial.print("Pattern Reverse: ");
+      Serial.println(patternReverse ? "ON" : "OFF");
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -966,6 +980,11 @@ void loop()
   {
     for (int i = patternIndices.size() - 2; i > 0; --i)
       patternIndicesFinal.push_back(patternIndices[i]);
+  }
+  // Apply REVERSE mode
+  if (patternReverse && !patternIndicesFinal.empty())
+  {
+    std::reverse(patternIndicesFinal.begin(), patternIndicesFinal.end());
   }
 
   std::vector<uint8_t> playingChord;
@@ -1299,6 +1318,9 @@ void loop()
       break;
     case MODE_PATTERN_PLAYBACK:
       Serial.println("Pattern Playback Mode");
+      break;
+    case MODE_REVERSE:
+      Serial.println("Pattern Reverse");
       break;
     case MODE_RESOLUTION:
       Serial.println("Notes Per Beat");
