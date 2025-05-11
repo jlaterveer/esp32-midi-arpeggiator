@@ -55,7 +55,8 @@ enum EncoderMode
   MODE_OCTAVE,
   MODE_PATTERN,
   MODE_PATTERN_PLAYBACK,
-  MODE_REVERSE, // <-- Add this line
+  MODE_REVERSE,
+  MODE_SMOOTH, // <-- Add this line
   MODE_RESOLUTION,
   MODE_REPEAT,
   MODE_TRANSPOSE,
@@ -65,7 +66,7 @@ enum EncoderMode
   MODE_BALANCE
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 14; // <-- Update to match new mode count
+const int encoderModeSize = 15; // <-- Update to match new mode count
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -77,6 +78,9 @@ PatternPlaybackMode patternPlaybackMode = STRAIGHT;
 
 // --- REVERSE mode for pattern playback ---
 bool patternReverse = false;
+
+// --- SMOOTH mode for pattern playback ---
+bool patternSmooth = false;
 
 // --- PARAMETERS ---
 // All arpeggiator parameters
@@ -919,6 +923,11 @@ void loop()
       Serial.print("Pattern Reverse: ");
       Serial.println(patternReverse ? "ON" : "OFF");
       break;
+    case MODE_SMOOTH:
+      patternSmooth = !patternSmooth;
+      Serial.print("Pattern Smooth: ");
+      Serial.println(patternSmooth ? "ON" : "OFF");
+      break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
@@ -988,28 +997,60 @@ void loop()
   }
 
   std::vector<uint8_t> playingChord;
-  for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
+  if (patternSmooth && octaveRange != 0 && !patternIndicesFinal.empty())
   {
-    if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
-      continue;
-    for (uint8_t idx : patternIndicesFinal)
+    // SMOOTH: deduplicate last note of one octave and first note of next octave if equal
+    int octStart = -abs(octaveRange);
+    int octEnd = abs(octaveRange);
+    int octStep = (octaveRange >= 0) ? 1 : -1;
+    int prevNote = -1;
+    bool first = true;
+    for (int oct = octStart; (octaveRange >= 0) ? (oct <= octEnd) : (oct >= octEnd); oct += octStep)
     {
-      if (selectedPatternIndex == PAT_ASPLAYED)
+      if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
+        continue;
+      for (size_t i = 0; i < patternIndicesFinal.size(); ++i)
       {
-        if (idx < playedChord.size())
-        {
-          int shifted = playedChord[idx] + 12 * oct;
-          if (shifted >= 0 && shifted <= 127)
-            playingChord.push_back(shifted);
-        }
+        uint8_t idx = patternIndicesFinal[i];
+        int note = (selectedPatternIndex == PAT_ASPLAYED)
+                       ? (idx < playedChord.size() ? playedChord[idx] + 12 * oct : -1)
+                       : (idx < orderedChord.size() ? orderedChord[idx] + 12 * oct : -1);
+        if (note < 0 || note > 127)
+          continue;
+        if (!first && note == prevNote)
+          continue; // skip duplicate at octave boundary
+        playingChord.push_back(note);
+        prevNote = note;
+        first = false;
       }
-      else
+    }
+  }
+  else
+  {
+    // Normal (non-smooth) playingChord construction
+    for (int oct = -abs(octaveRange); oct <= abs(octaveRange); ++oct)
+    {
+      if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
+        continue;
+      for (uint8_t idx : patternIndicesFinal)
       {
-        if (idx < orderedChord.size())
+        if (selectedPatternIndex == PAT_ASPLAYED)
         {
-          int shifted = orderedChord[idx] + 12 * oct;
-          if (shifted >= 0 && shifted <= 127)
-            playingChord.push_back(shifted);
+          if (idx < playedChord.size())
+          {
+            int shifted = playedChord[idx] + 12 * oct;
+            if (shifted >= 0 && shifted <= 127)
+              playingChord.push_back(shifted);
+          }
+        }
+        else
+        {
+          if (idx < orderedChord.size())
+          {
+            int shifted = orderedChord[idx] + 12 * oct;
+            if (shifted >= 0 && shifted <= 127)
+              playingChord.push_back(shifted);
+          }
         }
       }
     }
@@ -1321,6 +1362,9 @@ void loop()
       break;
     case MODE_REVERSE:
       Serial.println("Pattern Reverse");
+      break;
+    case MODE_SMOOTH:
+      Serial.println("Pattern Smooth");
       break;
     case MODE_RESOLUTION:
       Serial.println("Notes Per Beat");
