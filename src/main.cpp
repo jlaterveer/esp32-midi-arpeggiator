@@ -585,6 +585,64 @@ void sendNoteOff(uint8_t note)
   usbMIDI.noteOff(note, 0, 1); // Channel 1
 }
 
+// --- MIDI CC PARAMETER CONTROL ---
+// Map MIDI CC numbers to parameter pointers or setters
+void handleMidiCC(uint8_t cc, uint8_t value)
+{
+  switch (cc)
+  {
+  case 1: // Mod Wheel -> BPM (scaled 40-240)
+    bpm = map(value, 0, 127, 40, 240);
+    break;
+  case 2: // Breath -> Note Length %
+    noteLengthPercent = map(value, 0, 127, 5, 100);
+    break;
+  case 3: // CC3 -> Velocity
+    noteVelocity = map(value, 0, 127, 1, 127);
+    break;
+  case 4: // CC4 -> Octave Range
+    octaveRange = map(value, 0, 127, -3, 3);
+    break;
+  case 5: // CC5 -> Pattern
+    selectedPatternIndex = constrain(map(value, 0, 127, 0, PAT_COUNT - 1), 0, PAT_COUNT - 1);
+    break;
+  case 6: // CC6 -> Pattern Playback Mode
+    patternPlaybackMode = (value < 64) ? STRAIGHT : LOOP;
+    break;
+  case 7: // CC7 -> Pattern Reverse
+    patternReverse = (value >= 64);
+    break;
+  case 8: // CC8 -> Pattern Smooth
+    patternSmooth = (value >= 64);
+    break;
+  case 9: // CC9 -> Note Repeat
+    noteRepeat = constrain(map(value, 0, 127, 1, 4), 1, 4);
+    break;
+  case 10: // CC10 -> Transpose
+    transpose = map(value, 0, 127, minTranspose, maxTranspose);
+    break;
+  case 11: // CC11 -> Velocity Dynamics
+    velocityDynamicsPercent = map(value, 0, 127, 0, 100);
+    break;
+  case 12: // CC12 -> Timing Humanize
+    timingHumanizePercent = map(value, 0, 127, 0, maxTimingHumanizePercent);
+    timingHumanize = (timingHumanizePercent > 0);
+    break;
+  case 13: // CC13 -> Note Length Randomize
+    noteLengthRandomizePercent = map(value, 0, 127, 0, maxNoteLengthRandomizePercent);
+    break;
+  case 14: // CC14 -> Note Balance
+    noteBalancePercent = map(value, 0, 127, -100, 100);
+    break;
+  case 15: // CC15 -> Notes Per Beat (Resolution)
+    notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
+    notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
+    break;
+    // Add more CC mappings as needed
+  }
+  arpInterval = 60000 / (bpm * notesPerBeat);
+}
+
 // --- MIDI IN PARSING ---
 // MIDI parser state machine
 enum MidiState
@@ -628,10 +686,12 @@ void handleNoteOff(uint8_t note)
 // Parse incoming MIDI bytes (hardware MIDI in)
 void readMidiByte(uint8_t byte)
 {
+  static uint8_t lastStatus = 0;
   if (byte & 0x80)
   {
     midiStatus = byte;
     midiState = WaitingData1;
+    lastStatus = byte;
   }
   else
   {
@@ -646,6 +706,8 @@ void readMidiByte(uint8_t byte)
         handleNoteOn(midiData1);
       else if ((midiStatus & 0xF0) == 0x80 || ((midiStatus & 0xF0) == 0x90 && byte == 0))
         handleNoteOff(midiData1);
+      else if ((midiStatus & 0xF0) == 0xB0) // CC
+        handleMidiCC(midiData1, byte);
       midiState = WaitingData1;
       break;
     }
@@ -951,6 +1013,9 @@ void loop()
       break;
     case 0x08: // Note Off
       handleNoteOff(packet.byte2);
+      break;
+    case 0x0B: // Control Change (CC)
+      handleMidiCC(packet.byte2, packet.byte3);
       break;
     }
   }
