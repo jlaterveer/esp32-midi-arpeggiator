@@ -4,10 +4,11 @@
 #include <USB.h>
 #include <USBMIDI.h>
 
+// EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
 
 // --- CONFIGURATION ---
-// Pin assignments
+// Pin assignments for MIDI, LED, encoder, and buttons
 const uint8_t midiOutTxPin = 5;
 const uint8_t midiInRxPin = 4;
 const uint8_t ledBuiltIn = 21;
@@ -40,7 +41,7 @@ unsigned char rotary_process()
 }
 
 // --- ENCODER MODES ---
-// List of all editable parameters
+// List of all editable parameters for the encoder
 enum EncoderMode
 {
   MODE_BPM,
@@ -50,7 +51,7 @@ enum EncoderMode
   MODE_PATTERN,
   MODE_PATTERN_PLAYBACK,
   MODE_REVERSE,
-  MODE_SMOOTH, // <-- Add this line
+  MODE_SMOOTH, // Pattern smooth mode
   MODE_RESOLUTION,
   MODE_REPEAT,
   MODE_TRANSPOSE,
@@ -60,7 +61,7 @@ enum EncoderMode
   MODE_BALANCE
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 15; // <-- Update to match new mode count
+const int encoderModeSize = 15; // Number of encoder modes
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -104,28 +105,10 @@ int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
 
 // --- PATTERNS ---
-// Arpeggiator patterns
-enum ArpPattern
-{
-  UP,
-  DOWN,
-  TRIANGLE,
-  SINE,
-  SQUARE,
-  RANDOM,
-  PLAYED,
-  CHORD
-};
-ArpPattern currentPattern = PLAYED;
-const char *patternNames[] = {"UP", "DOWN", "TRIANGLE", "SINE", "SQUARE", "RANDOM", "PLAYED", "CHORD"};
-bool ascending = true; // For TRIANGLE pattern
-const uint8_t sineTable[16] = {0, 1, 2, 4, 6, 8, 10, 12, 15, 12, 10, 8, 6, 4, 2, 1};
-
-// --- Custom pattern generators ---
-// All patterns use 0-based indices for compatibility with C++ arrays
-
+// Custom pattern generators for arpeggiator
 std::vector<uint8_t> patternUp(int n)
 {
+  // Ascending pattern
   std::vector<uint8_t> v(n);
   for (int i = 0; i < n; ++i)
     v[i] = i;
@@ -134,6 +117,7 @@ std::vector<uint8_t> patternUp(int n)
 
 std::vector<uint8_t> patternDown(int n)
 {
+  // Descending pattern
   std::vector<uint8_t> v(n);
   for (int i = 0; i < n; ++i)
     v[i] = n - 1 - i;
@@ -142,6 +126,7 @@ std::vector<uint8_t> patternDown(int n)
 
 std::vector<uint8_t> patternUpDown(int n)
 {
+  // Up then down (excluding endpoints)
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
     v.push_back(i);
@@ -152,6 +137,7 @@ std::vector<uint8_t> patternUpDown(int n)
 
 std::vector<uint8_t> patternDownUp(int n)
 {
+  // Down then up (excluding endpoints)
   std::vector<uint8_t> v;
   for (int i = n - 1; i >= 0; --i)
     v.push_back(i);
@@ -162,6 +148,7 @@ std::vector<uint8_t> patternDownUp(int n)
 
 std::vector<uint8_t> patternOuterIn(int n)
 {
+  // Alternate from outer notes inwards
   std::vector<uint8_t> v;
   int left = 0, right = n - 1;
   while (left <= right)
@@ -177,6 +164,7 @@ std::vector<uint8_t> patternOuterIn(int n)
 
 std::vector<uint8_t> patternInwardBounce(int n)
 {
+  // Bounce inwards from the middle
   std::vector<uint8_t> v;
   int mid = (n - 1) / 2;
   v.push_back(mid);
@@ -192,6 +180,7 @@ std::vector<uint8_t> patternInwardBounce(int n)
 
 std::vector<uint8_t> patternZigzag(int n)
 {
+  // Zigzag pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; i += 2)
     v.push_back(i);
@@ -202,6 +191,7 @@ std::vector<uint8_t> patternZigzag(int n)
 
 std::vector<uint8_t> patternSpiral(int n)
 {
+  // Spiral pattern
   std::vector<uint8_t> v;
   int left = 0, right = n - 1, i = 0;
   while (left <= right)
@@ -217,6 +207,7 @@ std::vector<uint8_t> patternSpiral(int n)
 
 std::vector<uint8_t> patternMirror(int n)
 {
+  // Mirror pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
     v.push_back(i);
@@ -227,6 +218,7 @@ std::vector<uint8_t> patternMirror(int n)
 
 std::vector<uint8_t> patternSaw(int n)
 {
+  // Saw pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
     v.push_back(i);
@@ -236,6 +228,7 @@ std::vector<uint8_t> patternSaw(int n)
 
 std::vector<uint8_t> patternSawReverse(int n)
 {
+  // Reverse saw pattern
   std::vector<uint8_t> v;
   for (int i = n - 1; i >= 0; --i)
     v.push_back(i);
@@ -245,6 +238,7 @@ std::vector<uint8_t> patternSawReverse(int n)
 
 std::vector<uint8_t> patternBounce(int n)
 {
+  // Bounce pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
   {
@@ -257,6 +251,7 @@ std::vector<uint8_t> patternBounce(int n)
 
 std::vector<uint8_t> patternReverseBounce(int n)
 {
+  // Reverse bounce pattern
   std::vector<uint8_t> v;
   for (int i = n - 1; i >= 0; --i)
   {
@@ -269,6 +264,7 @@ std::vector<uint8_t> patternReverseBounce(int n)
 
 std::vector<uint8_t> patternLadder(int n)
 {
+  // Ladder pattern
   std::vector<uint8_t> v;
   for (int i = 1; i <= n; ++i)
   {
@@ -280,6 +276,7 @@ std::vector<uint8_t> patternLadder(int n)
 
 std::vector<uint8_t> patternSkipUp(int n)
 {
+  // Skip up pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; i += 2)
     v.push_back(i);
@@ -290,6 +287,7 @@ std::vector<uint8_t> patternSkipUp(int n)
 
 std::vector<uint8_t> patternJumpStep(int n)
 {
+  // Jump step pattern
   std::vector<uint8_t> v;
   int half = (n + 1) / 2;
   for (int i = 0; i < half; ++i)
@@ -303,6 +301,7 @@ std::vector<uint8_t> patternJumpStep(int n)
 
 std::vector<uint8_t> patternCrossover(int n)
 {
+  // Crossover pattern
   std::vector<uint8_t> v;
   int left = 1, right = n - 2;
   v.push_back(1 % n);
@@ -321,6 +320,7 @@ std::vector<uint8_t> patternCrossover(int n)
 
 std::vector<uint8_t> patternRandom(int n)
 {
+  // Random pattern
   std::vector<uint8_t> v(n);
   for (int i = 0; i < n; ++i)
     v[i] = i;
@@ -330,6 +330,7 @@ std::vector<uint8_t> patternRandom(int n)
 
 std::vector<uint8_t> patternEvenOdd(int n)
 {
+  // Even-odd pattern
   std::vector<uint8_t> v;
   for (int i = 1; i < n; i += 2)
     v.push_back(i);
@@ -340,6 +341,7 @@ std::vector<uint8_t> patternEvenOdd(int n)
 
 std::vector<uint8_t> patternOddEven(int n)
 {
+  // Odd-even pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; i += 2)
     v.push_back(i);
@@ -350,6 +352,7 @@ std::vector<uint8_t> patternOddEven(int n)
 
 std::vector<uint8_t> patternEdgeLoop(int n)
 {
+  // Edge loop pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
   {
@@ -361,6 +364,7 @@ std::vector<uint8_t> patternEdgeLoop(int n)
 
 std::vector<uint8_t> patternCenterBounce(int n)
 {
+  // Center bounce pattern
   std::vector<uint8_t> v;
   int mid = n / 2;
   for (int i = 0; i < n; ++i)
@@ -373,6 +377,7 @@ std::vector<uint8_t> patternCenterBounce(int n)
 
 std::vector<uint8_t> patternUpDouble(int n)
 {
+  // Up double pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
   {
@@ -384,6 +389,7 @@ std::vector<uint8_t> patternUpDouble(int n)
 
 std::vector<uint8_t> patternSkipReverse(int n)
 {
+  // Skip reverse pattern
   std::vector<uint8_t> v;
   for (int i = n - 1; i >= 0; i -= 2)
     v.push_back(i);
@@ -394,6 +400,7 @@ std::vector<uint8_t> patternSkipReverse(int n)
 
 std::vector<uint8_t> patternSnake(int n)
 {
+  // Snake pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n - 1; ++i)
   {
@@ -406,6 +413,7 @@ std::vector<uint8_t> patternSnake(int n)
 
 std::vector<uint8_t> patternPendulum(int n)
 {
+  // Pendulum pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
     v.push_back(i);
@@ -416,6 +424,7 @@ std::vector<uint8_t> patternPendulum(int n)
 
 std::vector<uint8_t> patternAsymmetricLoop(int n)
 {
+  // Asymmetric loop pattern
   std::vector<uint8_t> v;
   v.push_back(0);
   for (int i = 2; i <= n; ++i)
@@ -427,6 +436,7 @@ std::vector<uint8_t> patternAsymmetricLoop(int n)
 
 std::vector<uint8_t> patternShortLong(int n)
 {
+  // Short-long pattern
   std::vector<uint8_t> v;
   for (int i = 1; i <= n; ++i)
   {
@@ -438,6 +448,7 @@ std::vector<uint8_t> patternShortLong(int n)
 
 std::vector<uint8_t> patternBackwardJump(int n)
 {
+  // Backward jump pattern
   std::vector<uint8_t> v;
   for (int i = n - 1; i >= 0; i -= 3)
     v.push_back(i);
@@ -448,6 +459,7 @@ std::vector<uint8_t> patternBackwardJump(int n)
 
 std::vector<uint8_t> patternInsideBounce(int n)
 {
+  // Inside bounce pattern
   std::vector<uint8_t> v;
   int left = 1, right = n - 2;
   while (left <= right)
@@ -463,6 +475,7 @@ std::vector<uint8_t> patternInsideBounce(int n)
 
 std::vector<uint8_t> patternStaggeredRise(int n)
 {
+  // Staggered rise pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; i += 2)
     v.push_back(i);
@@ -473,6 +486,7 @@ std::vector<uint8_t> patternStaggeredRise(int n)
 
 std::vector<uint8_t> patternAsPlayed(int n, const std::vector<uint8_t> &playedOrder)
 {
+  // As played pattern
   std::vector<uint8_t> v;
   for (int i = 0; i < n; ++i)
     v.push_back(i);
@@ -480,6 +494,7 @@ std::vector<uint8_t> patternAsPlayed(int n, const std::vector<uint8_t> &playedOr
 }
 
 // --- Pattern selection state for MODE_PATTERN ---
+// Enum for all custom patterns
 enum CustomPattern
 {
   PAT_UP,
@@ -517,6 +532,7 @@ enum CustomPattern
   PAT_COUNT // must be last
 };
 
+// Pattern names for display/debug
 const char *customPatternNames[PAT_COUNT] = {
     "Up", "Down", "Up-Down", "Down-Up", "Outer-In", "Inward Bounce", "Zigzag", "Spiral", "Mirror", "Saw", "Saw Reverse",
     "Bounce", "Reverse Bounce", "Ladder", "Skip Up", "Jump Step", "Crossover", "Random", "Even-Odd", "Odd-Even",
@@ -532,25 +548,24 @@ PatternGen customPatternFuncs[PAT_COUNT - 1] = {
     patternUpDouble, patternSkipReverse, patternSnake, patternPendulum, patternAsymmetricLoop, patternShortLong,
     patternBackwardJump, patternInsideBounce, patternStaggeredRise};
 
-// --- Pattern selection index for MODE_PATTERN ---
+// Index of currently selected pattern
 int selectedPatternIndex = 0;
 
 // --- STATE ---
 // Chord and note state
-std::vector<uint8_t> currentChord;
-std::vector<uint8_t> tempChord;
-uint8_t leadNote = 0;
-bool capturingChord = false;
-bool chordLatched = false;
-size_t currentNoteIndex = 0;
-bool noteOnActive = false;
-unsigned long noteOnStartTime = 0;
-uint8_t lastPlayedNote = 0;
+std::vector<uint8_t> currentChord; // Latched chord
+std::vector<uint8_t> tempChord;    // Chord being captured
+uint8_t leadNote = 0;              // First note of chord
+bool capturingChord = false;       // Are we capturing a chord?
+size_t currentNoteIndex = 0;       // Step in pattern
+bool noteOnActive = false;         // Is a note currently on?
+unsigned long noteOnStartTime = 0; // When was note on sent
+uint8_t lastPlayedNote = 0;        // Last note played
 
 // --- LED FLASH STATE ---
-unsigned long ledFlashStart = 0;
-bool ledFlashing = false;
-const unsigned long ledFlashDuration = 100;
+unsigned long ledFlashStart = 0;            // When did LED flash start
+bool ledFlashing = false;                   // Is LED currently flashing
+const unsigned long ledFlashDuration = 100; // ms
 
 // --- MIDI I/O ---
 USBMIDI usbMIDI; // USB MIDI object
@@ -632,7 +647,6 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
     notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
     break;
-    // Add more CC mappings as needed
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
 }
@@ -651,13 +665,14 @@ uint8_t midiStatus, midiData1;
 // Handle incoming MIDI note on
 void handleNoteOn(uint8_t note)
 {
+  // Start capturing a new chord if not already capturing
   if (!capturingChord)
   {
     capturingChord = true;
-    chordLatched = false;
     tempChord.clear();
     leadNote = note;
   }
+  // Add note to tempChord if not already present
   if (std::find(tempChord.begin(), tempChord.end(), note) == tempChord.end())
   {
     tempChord.push_back(note);
@@ -667,11 +682,11 @@ void handleNoteOn(uint8_t note)
 // Handle incoming MIDI note off
 void handleNoteOff(uint8_t note)
 {
+  // Latch chord when lead note is released
   if (capturingChord && note == leadNote)
   {
     currentChord = tempChord;
     capturingChord = false;
-    chordLatched = true;
     currentNoteIndex = 0;
     noteRepeatCounter = 0;
   }
@@ -680,12 +695,10 @@ void handleNoteOff(uint8_t note)
 // Parse incoming MIDI bytes (hardware MIDI in)
 void readMidiByte(uint8_t byte)
 {
-  static uint8_t lastStatus = 0;
   if (byte & 0x80)
   {
     midiStatus = byte;
     midiState = WaitingData1;
-    lastStatus = byte;
   }
   else
   {
@@ -803,13 +816,13 @@ void loop()
   // --- Clear button handling ---
   static bool lastClear = HIGH;
   bool currentClear = digitalRead(clearButtonPin);
+  // If clear button pressed, clear chord and reset state
   if (lastClear == HIGH && currentClear == LOW)
   {
     currentChord.clear();
-    chordLatched = false;
     currentNoteIndex = 0;
     noteRepeatCounter = 0;
-    neopixelWrite(ledBuiltIn, 0, 0, 127);
+    neopixelWrite(ledBuiltIn, 0, 0, 64); // Blue LED flash
     ledFlashStart = millis();
     ledFlashing = true;
   }
@@ -820,6 +833,7 @@ void loop()
   bool swDebounced = (encoderSWDebounce == 0xFFFF);
 
   static bool swHandled = false;
+  // Encoder switch short press: cycle encoder mode
   if (swDebounced && !swHandled)
   {
     encoderMode = static_cast<EncoderMode>((encoderMode + 1) % encoderModeSize);
@@ -834,7 +848,7 @@ void loop()
   }
 
   // --- Add encoder switch for STRAIGHT/LOOP toggle ---
-  // Use encoderSW long press to toggle patternPlaybackMode
+  // Encoder switch long press: toggle pattern playback mode
   static unsigned long encoderSWPressTime = 0;
   static bool encoderSWPrev = false;
   bool encoderSWNow = !digitalRead(encoderSW);
@@ -857,6 +871,7 @@ void loop()
   unsigned char result = rotary_process();
   static int stepCounter = 0;
   int delta = 0;
+  // Count encoder steps
   if (result == 0x10)
     stepCounter++;
   else if (result == 0x20)
@@ -870,6 +885,7 @@ void loop()
   // --- Parameter adjustment via encoder ---
   if (delta != 0)
   {
+    // Adjust parameter based on encoder mode
     switch (encoderMode)
     {
     case MODE_BPM:
@@ -1010,7 +1026,8 @@ void loop()
 
   // --- Build the playingChord with octave shifts and no duplicates using selected pattern
   std::vector<uint8_t> patternIndices;
-  if (encoderMode == MODE_PATTERN && selectedPatternIndex >= 0 && selectedPatternIndex < PAT_COUNT)
+  // Always use the selected pattern, regardless of encoder mode
+  if (selectedPatternIndex >= 0 && selectedPatternIndex < PAT_COUNT)
   {
     if (selectedPatternIndex == PAT_ASPLAYED)
     {
@@ -1114,173 +1131,47 @@ void loop()
 
   uint8_t velocityToSend = noteVelocity;
 
-  // --- CHORD pattern: play all notes together ---
-  static bool chordNotesOn = false;
-  static std::vector<uint8_t> chordNotesPlaying;
-  static std::vector<uint8_t> chordVelocities;
-
-  if (currentPattern == CHORD)
+  // --- Note scheduling: play next note if ready ---
+  if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
   {
-    if (!chordNotesOn && !playingChord.empty() && now >= nextNoteTime)
+    uint8_t noteIndex = 0;
+    size_t chordSize = playingChord.size();
+    noteIndex = currentNoteIndex % chordSize;
+
+    int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
+    lastPlayedNote = transposedNote;
+
+    velocityToSend = noteVelocity;
+    if (velocityDynamicsPercent > 0)
     {
-      chordNotesPlaying = playingChord;
-      chordVelocities.clear();
-      for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
-      {
-        uint8_t v = noteVelocity;
-        if (velocityDynamicsPercent > 0)
-        {
-          int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
-          v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
-        }
-        chordVelocities.push_back(v);
-      }
-      timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
-      noteOnStartTime = now + timingOffset;
-      chordNotesOn = true;
-      noteOnActive = true;
-      noteRepeatCounter = 0;
-      nextNoteTime += arpInterval;
+      int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
+      velocityToSend = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
     }
-    static bool chordNoteOnSent = false;
-    if (chordNotesOn && !chordNoteOnSent && now >= noteOnStartTime)
-    {
-      for (size_t i = 0; i < chordNotesPlaying.size(); ++i)
-      {
-        sendNoteOff(chordNotesPlaying[i]);
-        sendNoteOn(chordNotesPlaying[i], chordVelocities[i]);
-      }
-      chordNoteOnSent = true;
-    }
-    if (chordNotesOn && chordNoteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
-    {
-      for (uint8_t note : chordNotesPlaying)
-      {
-        sendNoteOff(note);
-      }
-      noteRepeatCounter++;
-      if (noteRepeatCounter >= noteRepeat)
-      {
-        chordNotesOn = false;
-        chordNoteOnSent = false;
-        noteOnActive = false;
-      }
-      else
-      {
-        chordNoteOnSent = false;
-        noteOnStartTime = now + timingOffset;
-      }
-    }
+
+    timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
+    noteOnStartTime = now + timingOffset;
+    noteOnActive = true;
+    nextNoteTime += arpInterval;
   }
-  else
+
+  static bool noteOnSent = false;
+  // Send note on when scheduled
+  if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
   {
-    // --- Note selection with balance ---
-    auto getBalancedNoteIndex = [&](size_t chordSize, size_t step) -> size_t
+    sendNoteOn(lastPlayedNote, velocityToSend);
+    noteOnSent = true;
+  }
+
+  // Send note off after note duration
+  if (noteOnActive && noteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
+  {
+    sendNoteOff(lastPlayedNote);
+    noteOnActive = false;
+    noteOnSent = false;
+    if (++noteRepeatCounter >= noteRepeat)
     {
-      if (chordSize <= 1)
-      {
-        return step % chordSize;
-      }
-      size_t idx = step % chordSize;
-      return constrain(idx, 0, chordSize - 1);
-    };
-
-    if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
-    {
-      uint8_t noteIndex = 0;
-      size_t chordSize = playingChord.size();
-      switch (currentPattern)
-      {
-      case UP:
-        noteIndex = getBalancedNoteIndex(chordSize, currentNoteIndex);
-        break;
-      case DOWN:
-        noteIndex = chordSize - 1 - getBalancedNoteIndex(chordSize, currentNoteIndex);
-        break;
-      case TRIANGLE:
-        if (ascending)
-        {
-          noteIndex = getBalancedNoteIndex(chordSize, currentNoteIndex);
-          if (noteIndex >= chordSize - 1)
-            ascending = false;
-        }
-        else
-        {
-          noteIndex = chordSize - 1 - getBalancedNoteIndex(chordSize, currentNoteIndex);
-          if (noteIndex == 0)
-            ascending = true;
-        }
-        break;
-      case SINE:
-        noteIndex = getBalancedNoteIndex(chordSize, map(sineTable[currentNoteIndex % 16], 0, 15, 0, chordSize - 1));
-        break;
-      case SQUARE:
-        noteIndex = getBalancedNoteIndex(chordSize, (currentNoteIndex % 2 == 0) ? 0 : chordSize - 1);
-        break;
-      case RANDOM:
-        noteIndex = getBalancedNoteIndex(chordSize, random(chordSize));
-        break;
-      case PLAYED:
-        noteIndex = getBalancedNoteIndex(chordSize, currentNoteIndex);
-        break;
-      }
-      int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
-      lastPlayedNote = transposedNote;
-
-      velocityToSend = noteVelocity;
-      if (velocityDynamicsPercent > 0)
-      {
-        int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
-        velocityToSend = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
-      }
-
-      timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
-      noteOnStartTime = now + timingOffset;
-      noteOnActive = true;
-      nextNoteTime += arpInterval;
-    }
-
-    static bool noteOnSent = false;
-    if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
-    {
-      sendNoteOn(lastPlayedNote, velocityToSend);
-      noteOnSent = true;
-    }
-
-    if (noteOnActive && noteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
-    {
-      sendNoteOff(lastPlayedNote);
-      noteOnActive = false;
-      noteOnSent = false;
-      if (++noteRepeatCounter >= noteRepeat)
-      {
-        noteRepeatCounter = 0;
-        switch (currentPattern)
-        {
-        case UP:
-        case DOWN:
-          currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
-          break;
-        case TRIANGLE:
-          if (ascending)
-            currentNoteIndex++;
-          else
-            currentNoteIndex--;
-          currentNoteIndex = constrain(currentNoteIndex, 0, playingChord.size() - 1);
-          break;
-        case SINE:
-          currentNoteIndex = (currentNoteIndex + 1) % 16;
-          break;
-        case SQUARE:
-          currentNoteIndex = (currentNoteIndex + 1) % 2;
-          break;
-        case RANDOM:
-          break;
-        case PLAYED:
-          currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
-          break;
-        }
-      }
+      noteRepeatCounter = 0;
+      currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
     }
   }
 
@@ -1294,7 +1185,6 @@ void loop()
   // --- Serial debug output for parameter changes ---
   static int lastBPM = bpm, lastLength = noteLengthPercent, lastVelocity = noteVelocity, lastOctave = octaveRange;
   static int lastResolutionIndex = notesPerBeatIndex, lastNoteRepeat = noteRepeat, lastTranspose = transpose;
-  static ArpPattern lastPattern = currentPattern;
   static EncoderMode lastMode = encoderMode;
   static int lastUseVelocityDynamics = velocityDynamicsPercent;
   static bool lastTimingHumanize = timingHumanize;
@@ -1343,17 +1233,6 @@ void loop()
     Serial.print("Transpose: ");
     Serial.println(transpose);
     lastTranspose = transpose;
-  }
-  if (encoderMode == MODE_PATTERN && currentPattern != lastPattern)
-  {
-    // --- Send note off for all possible notes in playingChord when switching pattern ---
-    for (uint8_t note : playingChord)
-    {
-      sendNoteOff(note);
-    }
-    Serial.print("Pattern: ");
-    Serial.println(patternNames[currentPattern]);
-    lastPattern = currentPattern;
   }
   if (encoderMode == MODE_DYNAMICS && velocityDynamicsPercent != lastUseVelocityDynamics)
   {
