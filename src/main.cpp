@@ -4,13 +4,7 @@
 #include <USB.h>
 #include <USBMIDI.h>
 
-// --- STEP PATTERN CONSTANTS (for step_patterns.h) ---
-#define MIN_STEPS 2
-#define MAX_STEPS 4
-// --- EEPROM CONFIGURATION ---
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
-
-#include "step_patterns.h" // <-- Must be included after the defines
 
 // --- CONFIGURATION ---
 // Pin assignments
@@ -789,22 +783,6 @@ void setup()
   usbMIDI.begin();
 
   delay(1000);
-
-  // --- EEPROM: Generate and store all step patterns if not already done ---
-  EEPROM.begin(EEPROM_SIZE);
-
-  // Use the last byte as a flag to check if EEPROM is initialized
-  if (EEPROM.read(EEPROM_SIZE - 1) != 0xA5)
-  {
-    writeAllStepPatternsToEEPROM();
-    EEPROM.write(EEPROM_SIZE - 1, 0xA5);
-    EEPROM.commit();
-    Serial.println("Step patterns written to EEPROM.");
-  }
-  else
-  {
-    Serial.println("Step patterns already in EEPROM.");
-  }
 
   capturingChord = true;
   tempChord.clear();
