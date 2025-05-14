@@ -181,7 +181,8 @@ void buildRandomChordSteps(
             break;
         }
         ++octave;
-        if (octave > 10) break; // avoid infinite loop
+        if (octave > 10)
+          break; // avoid infinite loop
       }
       // Add up to 2 higher notes to the chord
       for (size_t k = 0; k < 2 && k < higher.size(); ++k)
@@ -740,6 +741,9 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 15: // CC15 -> Notes Per Beat (Resolution)
     notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
     notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
+    break;
+  case 16: // CC16 -> Random Chord Percent
+    randomChordPercent = map(value, 0, 127, 0, 100);
     break;
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
