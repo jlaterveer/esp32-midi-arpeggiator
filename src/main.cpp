@@ -129,9 +129,10 @@ void buildRandomChordSteps(
     return;
   }
 
-  // Sort playedChord for adjacency
+  // Sort playedChord for adjacency and deduplicate
   std::vector<uint8_t> sortedPlayed = playedChord;
   std::sort(sortedPlayed.begin(), sortedPlayed.end());
+  sortedPlayed.erase(std::unique(sortedPlayed.begin(), sortedPlayed.end()), sortedPlayed.end());
 
   size_t steps = playingChord.size();
   int numChords = (steps * percent + 99) / 100;
@@ -156,12 +157,39 @@ void buildRandomChordSteps(
   {
     if (isChordStep[i])
     {
-      // Pick a random center index for the chord, avoiding edges
-      int center = random(1, (int)sortedPlayed.size() - 1);
-      stepNotes.push_back({std::vector<uint8_t>{
-          sortedPlayed[center - 1],
-          sortedPlayed[center],
-          sortedPlayed[center + 1]}});
+      // The root note is the pattern note
+      uint8_t root = playingChord[i];
+      // Find the next two higher notes from sortedPlayed, transposed up if needed
+      std::vector<uint8_t> chord{root};
+      // Find all notes in sortedPlayed that are higher than root
+      std::vector<uint8_t> higher;
+      for (uint8_t n : sortedPlayed)
+      {
+        if (n > root)
+          higher.push_back(n);
+      }
+      // If not enough higher notes, transpose up by octaves
+      int octave = 1;
+      while (higher.size() < 2)
+      {
+        for (uint8_t n : sortedPlayed)
+        {
+          uint8_t candidate = n + 12 * octave;
+          if (candidate > root && candidate <= 127)
+            higher.push_back(candidate);
+          if (higher.size() >= 2)
+            break;
+        }
+        ++octave;
+        if (octave > 10) break; // avoid infinite loop
+      }
+      // Add up to 2 higher notes to the chord
+      for (size_t k = 0; k < 2 && k < higher.size(); ++k)
+        chord.push_back(higher[k]);
+      // If still not enough, fill with root transposed up
+      while (chord.size() < 3)
+        chord.push_back(root + 12 * (int)chord.size());
+      stepNotes.push_back({chord});
     }
     else
     {
