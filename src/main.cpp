@@ -70,20 +70,20 @@ enum PatternPlaybackMode
   STRAIGHT,
   LOOP
 };
-PatternPlaybackMode patternPlaybackMode = STRAIGHT;
+PatternPlaybackMode patternPlaybackMode = LOOP;
 
 // --- REVERSE mode for pattern playback ---
 bool patternReverse = false;
 
 // --- SMOOTH mode for pattern playback ---
-bool patternSmooth = false;
+bool patternSmooth = true;
 
 // --- PARAMETERS ---
 // All arpeggiator parameters
 int bpm = 96;                     // Beats per minute
 int noteLengthPercent = 40;       // Note length as percent of interval
 int noteVelocity = 127;           // MIDI velocity
-int octaveRange = 2;              // Octave spread
+int octaveRange = 0;              // Octave spread
 int transpose = 0;                // Transpose in octaves
 int velocityDynamicsPercent = 56; // Velocity randomization percent
 bool timingHumanize = false;      // Enable timing humanization
@@ -100,9 +100,9 @@ const int minTranspose = -3, maxTranspose = 3;
 // Note resolution options (notes per beat)
 const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
 const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
-int notesPerBeatIndex = 3; // Default: 4 notes per beat
+int notesPerBeatIndex = 4; // Default: 4 notes per beat
 int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-int noteRepeat = 2; // Number of repeats per note
+int noteRepeat = 1; // Number of repeats per note
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
 
@@ -897,12 +897,14 @@ void setup()
 
   capturingChord = true;
   tempChord.clear();
-  leadNote = 48;
-  handleNoteOn(48);
+  leadNote = 55;
   handleNoteOn(55);
-  handleNoteOn(52);
+  handleNoteOn(58);
   handleNoteOn(60);
-  handleNoteOff(48);
+  handleNoteOn(62);
+  handleNoteOn(65);
+  handleNoteOn(67);
+  handleNoteOff(55);
 }
 
 // --- LOOP ---
