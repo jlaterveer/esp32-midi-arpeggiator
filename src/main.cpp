@@ -58,10 +58,11 @@ enum EncoderMode
   MODE_DYNAMICS,
   MODE_HUMANIZE,
   MODE_LENGTH_RANDOMIZE,
-  MODE_BALANCE
+  MODE_BALANCE,
+  MODE_RANDOM_CHORD // New mode: random steps replaced by 3-note chords
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 15; // Number of encoder modes
+const int encoderModeSize = 16; // Updated to match new mode count
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -69,20 +70,20 @@ enum PatternPlaybackMode
   STRAIGHT,
   LOOP
 };
-PatternPlaybackMode patternPlaybackMode = STRAIGHT;
+PatternPlaybackMode patternPlaybackMode = LOOP;
 
 // --- REVERSE mode for pattern playback ---
 bool patternReverse = false;
 
 // --- SMOOTH mode for pattern playback ---
-bool patternSmooth = false;
+bool patternSmooth = true;
 
 // --- PARAMETERS ---
 // All arpeggiator parameters
 int bpm = 96;                     // Beats per minute
 int noteLengthPercent = 40;       // Note length as percent of interval
 int noteVelocity = 127;           // MIDI velocity
-int octaveRange = 2;              // Octave spread
+int octaveRange = 0;              // Octave spread
 int transpose = 0;                // Transpose in octaves
 int velocityDynamicsPercent = 56; // Velocity randomization percent
 bool timingHumanize = false;      // Enable timing humanization
@@ -91,6 +92,7 @@ const int maxTimingHumanizePercent = 100;
 int noteLengthRandomizePercent = 20; // Note length randomization percent
 const int maxNoteLengthRandomizePercent = 100;
 int noteBalancePercent = 0; // Note bias percent
+int randomChordPercent = 0; // Percentage of steps to replace with random 3-note chords
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -98,11 +100,104 @@ const int minTranspose = -3, maxTranspose = 3;
 // Note resolution options (notes per beat)
 const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
 const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
-int notesPerBeatIndex = 3; // Default: 4 notes per beat
+int notesPerBeatIndex = 4; // Default: 4 notes per beat
 int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-int noteRepeat = 2; // Number of repeats per note
+int noteRepeat = 1; // Number of repeats per note
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
+
+// --- RANDOM CHORD FUNCTION ---
+// At random steps, replace the note with a 3-note chord (from playedChord, close together)
+// Each chord is played as a single step (all 3 notes at once)
+struct StepNotes
+{
+  std::vector<uint8_t> notes;
+};
+
+void buildRandomChordSteps(
+    std::vector<StepNotes> &stepNotes,
+    const std::vector<uint8_t> &playingChord,
+    const std::vector<uint8_t> &playedChord,
+    int percent)
+{
+  stepNotes.clear();
+  if (playingChord.empty() || playedChord.size() < 3 || percent <= 0)
+  {
+    // Default: each step is a single note
+    for (uint8_t n : playingChord)
+      stepNotes.push_back({std::vector<uint8_t>{n}});
+    return;
+  }
+
+  // Sort playedChord for adjacency and deduplicate
+  std::vector<uint8_t> sortedPlayed = playedChord;
+  std::sort(sortedPlayed.begin(), sortedPlayed.end());
+  sortedPlayed.erase(std::unique(sortedPlayed.begin(), sortedPlayed.end()), sortedPlayed.end());
+
+  size_t steps = playingChord.size();
+  int numChords = (steps * percent + 99) / 100;
+  if (numChords == 0)
+  {
+    for (uint8_t n : playingChord)
+      stepNotes.push_back({std::vector<uint8_t>{n}});
+    return;
+  }
+
+  // Pick random steps to replace
+  std::vector<size_t> indices(steps);
+  for (size_t i = 0; i < steps; ++i)
+    indices[i] = i;
+  std::random_shuffle(indices.begin(), indices.end());
+
+  std::vector<bool> isChordStep(steps, false);
+  for (int i = 0; i < numChords && i < (int)steps; ++i)
+    isChordStep[indices[i]] = true;
+
+  for (size_t i = 0; i < steps; ++i)
+  {
+    if (isChordStep[i])
+    {
+      // The root note is the pattern note
+      uint8_t root = playingChord[i];
+      // Find the next two higher notes from sortedPlayed, transposed up if needed
+      std::vector<uint8_t> chord{root};
+      // Find all notes in sortedPlayed that are higher than root
+      std::vector<uint8_t> higher;
+      for (uint8_t n : sortedPlayed)
+      {
+        if (n > root)
+          higher.push_back(n);
+      }
+      // If not enough higher notes, transpose up by octaves
+      int octave = 1;
+      while (higher.size() < 2)
+      {
+        for (uint8_t n : sortedPlayed)
+        {
+          uint8_t candidate = n + 12 * octave;
+          if (candidate > root && candidate <= 127)
+            higher.push_back(candidate);
+          if (higher.size() >= 2)
+            break;
+        }
+        ++octave;
+        if (octave > 10)
+          break; // avoid infinite loop
+      }
+      // Add up to 2 higher notes to the chord
+      for (size_t k = 0; k < 2 && k < higher.size(); ++k)
+        chord.push_back(higher[k]);
+      // If still not enough, fill with root transposed up
+      while (chord.size() < 3)
+        chord.push_back(root + 12 * (int)chord.size());
+      stepNotes.push_back({chord});
+    }
+    else
+    {
+      stepNotes.push_back({std::vector<uint8_t>{playingChord[i]}});
+    }
+  }
+}
 
 // --- PATTERNS ---
 // Custom pattern generators for arpeggiator
@@ -647,6 +742,9 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
     notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
     break;
+  case 16: // CC16 -> Random Chord Percent
+    randomChordPercent = map(value, 0, 127, 0, 100);
+    break;
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
 }
@@ -799,12 +897,14 @@ void setup()
 
   capturingChord = true;
   tempChord.clear();
-  leadNote = 48;
-  handleNoteOn(48);
+  leadNote = 55;
   handleNoteOn(55);
-  handleNoteOn(52);
+  handleNoteOn(58);
   handleNoteOn(60);
-  handleNoteOff(48);
+  handleNoteOn(62);
+  handleNoteOn(65);
+  handleNoteOn(67);
+  handleNoteOff(55);
 }
 
 // --- LOOP ---
@@ -984,6 +1084,9 @@ void loop()
       Serial.print("Pattern Smooth: ");
       Serial.println(patternSmooth ? "ON" : "OFF");
       break;
+    case MODE_RANDOM_CHORD:
+      randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
+      break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
@@ -1119,6 +1222,10 @@ void loop()
   // --- Apply note bias based on noteBalancePercent ---
   applyNoteBiasToChord(playingChord, noteBalancePercent);
 
+  // --- Build stepNotes for random chord steps ---
+  std::vector<StepNotes> stepNotes;
+  buildRandomChordSteps(stepNotes, playingChord, playedChord, randomChordPercent);
+
   // --- Arpeggiator timing and note scheduling ---
   static int timingOffset = 0;
   static unsigned long nextNoteTime = 0;
@@ -1131,21 +1238,25 @@ void loop()
 
   uint8_t velocityToSend = noteVelocity;
 
-  // --- Note scheduling: play next note if ready ---
-  if (!noteOnActive && !playingChord.empty() && now >= nextNoteTime)
+  // --- Note scheduling: play next note/chord if ready ---
+  static std::vector<uint8_t> notesOn;
+  if (!noteOnActive && !stepNotes.empty() && now >= nextNoteTime)
   {
-    uint8_t noteIndex = 0;
-    size_t chordSize = playingChord.size();
-    noteIndex = currentNoteIndex % chordSize;
+    size_t chordSize = stepNotes.size();
+    size_t noteIndex = currentNoteIndex % chordSize;
+    notesOn = stepNotes[noteIndex].notes;
 
-    int transposedNote = constrain(playingChord[noteIndex] + 12 * transpose, 0, 127);
-    lastPlayedNote = transposedNote;
-
-    velocityToSend = noteVelocity;
-    if (velocityDynamicsPercent > 0)
+    // Send all notes in this step (chord or single note)
+    for (uint8_t n : notesOn)
     {
-      int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
-      velocityToSend = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
+      int transposedNote = constrain(n + 12 * transpose, 0, 127);
+      uint8_t v = velocityToSend;
+      if (velocityDynamicsPercent > 0)
+      {
+        int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
+        v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
+      }
+      sendNoteOn(transposedNote, v);
     }
 
     timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
@@ -1154,24 +1265,19 @@ void loop()
     nextNoteTime += arpInterval;
   }
 
-  static bool noteOnSent = false;
-  // Send note on when scheduled
-  if (noteOnActive && !noteOnSent && now >= noteOnStartTime)
+  // Send note off after note duration for all notes in the step
+  if (noteOnActive && now >= noteOnStartTime + randomizedNoteLengthMs)
   {
-    sendNoteOn(lastPlayedNote, velocityToSend);
-    noteOnSent = true;
-  }
-
-  // Send note off after note duration
-  if (noteOnActive && noteOnSent && now >= noteOnStartTime + randomizedNoteLengthMs)
-  {
-    sendNoteOff(lastPlayedNote);
+    for (uint8_t n : notesOn)
+    {
+      int transposedNote = constrain(n + 12 * transpose, 0, 127);
+      sendNoteOff(transposedNote);
+    }
     noteOnActive = false;
-    noteOnSent = false;
     if (++noteRepeatCounter >= noteRepeat)
     {
       noteRepeatCounter = 0;
-      currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
+      currentNoteIndex = (currentNoteIndex + 1) % stepNotes.size();
     }
   }
 
@@ -1191,6 +1297,7 @@ void loop()
   static int lastTimingHumanizePercent = timingHumanizePercent;
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   static int lastNoteBalancePercent = noteBalancePercent;
+  static int lastRandomChordPercent = randomChordPercent;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -1258,6 +1365,12 @@ void loop()
     Serial.println(noteBalancePercent);
     lastNoteBalancePercent = noteBalancePercent;
   }
+  if (encoderMode == MODE_RANDOM_CHORD && randomChordPercent != lastRandomChordPercent)
+  {
+    Serial.print("Random Chord Percent: ");
+    Serial.println(randomChordPercent);
+    lastRandomChordPercent = randomChordPercent;
+  }
 
   if (encoderMode != lastMode)
   {
@@ -1308,6 +1421,9 @@ void loop()
       break;
     case MODE_BALANCE:
       Serial.println("Note Balance Percent");
+      break;
+    case MODE_RANDOM_CHORD:
+      Serial.println("Random Chord Percent");
       break;
     }
     lastMode = encoderMode;
