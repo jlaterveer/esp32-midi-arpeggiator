@@ -722,15 +722,29 @@ void loop()
   if (patternSmooth && octaveRange != 0 && !patternIndicesFinal.empty())
   {
     // SMOOTH: deduplicate last note of one octave and first note of next octave if equal
-    int octStart = -abs(octaveRange);
-    int octEnd = abs(octaveRange);
-    int octStep = (octaveRange >= 0) ? 1 : -1;
+    int octStart, octEnd, octStep;
+    if (octaveRange > 0)
+    {
+      octStart = 0;
+      octEnd = octaveRange;
+      octStep = 1;
+    }
+    else if (octaveRange < 0)
+    {
+      octStart = 0;
+      octEnd = octaveRange;
+      octStep = -1;
+    }
+    else
+    {
+      octStart = 0;
+      octEnd = 0;
+      octStep = 1;
+    }
     int prevNote = -1;
     bool first = true;
-    for (int oct = octStart; (octaveRange >= 0) ? (oct <= octEnd) : (oct >= octEnd); oct += octStep)
+    for (int oct = octStart; (octStep > 0) ? (oct <= octEnd) : (oct >= octEnd); oct += octStep)
     {
-      if ((octaveRange >= 0 && oct < 0) || (octaveRange < 0 && oct > 0))
-        continue;
       for (size_t i = 0; i < patternIndicesFinal.size(); ++i)
       {
         uint8_t idx = patternIndicesFinal[i];
