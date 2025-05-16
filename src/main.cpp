@@ -43,15 +43,14 @@ unsigned char rotary_process()
 
 // --- RHYTHM PATTERNS ---
 // Use pattern generators for rhythm accents instead of static arrays
-int selectedRhythmPattern = 0; // Index into pattern generators for rhythm
+int selectedRhythmPattern = 0;                // Index into pattern generators for rhythm
 const int rhythmPatternCount = PAT_COUNT - 1; // Use all except PAT_ASPLAYED
 
 const char *rhythmPatternNames[rhythmPatternCount] = {
     "Up", "Down", "Up-Down", "Down-Up", "Outer-In", "Inward Bounce", "Zigzag", "Spiral", "Mirror", "Saw", "Saw Reverse",
     "Bounce", "Reverse Bounce", "Ladder", "Skip Up", "Jump Step", "Crossover", "Random", "Even-Odd", "Odd-Even",
     "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
-    "Backward Jump", "Inside Bounce", "Staggered Rise"
-};
+    "Backward Jump", "Inside Bounce", "Staggered Rise"};
 
 // --- ENCODER MODES ---
 // List of all editable parameters for the encoder
@@ -73,7 +72,7 @@ enum EncoderMode
   MODE_LENGTH_RANDOMIZE,
   MODE_BALANCE,
   MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
-  MODE_RHYTHM // Rhythm accent pattern selection
+  MODE_RHYTHM        // Rhythm accent pattern selection
 };
 EncoderMode encoderMode = MODE_BPM;
 const int encoderModeSize = 17; // Updated to match new mode count
@@ -844,13 +843,17 @@ void loop()
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
     // Normalize pattern indices to [0.1, 1.0]
     float rhythmMult = 1.0f;
-    if (!rhythmPatternIndices.empty()) {
+    if (!rhythmPatternIndices.empty())
+    {
       uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
       uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
       uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
-      if (maxIdx > minIdx) {
+      if (maxIdx > minIdx)
+      {
         rhythmMult = 0.1f + 0.9f * (float)(idx - minIdx) / (float)(maxIdx - minIdx);
-      } else {
+      }
+      else
+      {
         rhythmMult = 1.0f;
       }
     }
