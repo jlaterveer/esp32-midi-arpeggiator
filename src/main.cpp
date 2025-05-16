@@ -316,6 +316,9 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 16: // CC16 -> Random Chord Percent
     randomChordPercent = map(value, 0, 127, 0, 100);
     break;
+  case 17: // CC17 -> Rhythm Pattern
+    selectedRhythmPattern = constrain(map(value, 0, 127, 0, rhythmPatternCount - 1), 0, rhythmPatternCount - 1);
+    break;
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
 }
