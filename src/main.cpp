@@ -42,33 +42,16 @@ unsigned char rotary_process()
 }
 
 // --- RHYTHM PATTERNS ---
-enum RhythmPattern
-{
-  RHYTHM_STRAIGHT,
-  RHYTHM_WALTZ,
-  RHYTHM_SYNCOPATED,
-  RHYTHM_OFFBEAT,
-  RHYTHM_CUSTOM,
-  RHYTHM_COUNT
+// Use pattern generators for rhythm accents instead of static arrays
+int selectedRhythmPattern = 0; // Index into pattern generators for rhythm
+const int rhythmPatternCount = PAT_COUNT - 1; // Use all except PAT_ASPLAYED
+
+const char *rhythmPatternNames[rhythmPatternCount] = {
+    "Up", "Down", "Up-Down", "Down-Up", "Outer-In", "Inward Bounce", "Zigzag", "Spiral", "Mirror", "Saw", "Saw Reverse",
+    "Bounce", "Reverse Bounce", "Ladder", "Skip Up", "Jump Step", "Crossover", "Random", "Even-Odd", "Odd-Even",
+    "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
+    "Backward Jump", "Inside Bounce", "Staggered Rise"
 };
-
-const char *rhythmPatternNames[RHYTHM_COUNT] = {
-    "Straight", "Waltz", "Syncopated", "Offbeat", "Custom"};
-
-// Each rhythm pattern is an array of multipliers (0.0-1.0, will be scaled to 64-127)
-const float rhythmPatterns[RHYTHM_COUNT][8] = {
-    // RHYTHM_STRAIGHT: all accented
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    // RHYTHM_WALTZ: strong-weak-weak
-    {1, 0.3, 0.3, 1, 0.3, 0.3, 1, 0.3},
-    // RHYTHM_SYNCOPATED: accent on 2 and 4
-    {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
-    // RHYTHM_OFFBEAT: accent offbeats
-    {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
-    // RHYTHM_CUSTOM: user-editable (default to straight)
-    {1, 1, 1, 1, 1, 1, 1, 1}};
-int selectedRhythmPattern = 0;
-const int rhythmPatternLength = 8;
 
 // --- ENCODER MODES ---
 // List of all editable parameters for the encoder
@@ -90,7 +73,7 @@ enum EncoderMode
   MODE_LENGTH_RANDOMIZE,
   MODE_BALANCE,
   MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
-  MODE_RHYTHM        // <-- Add rhythm mode
+  MODE_RHYTHM // Rhythm accent pattern selection
 };
 EncoderMode encoderMode = MODE_BPM;
 const int encoderModeSize = 17; // Updated to match new mode count
@@ -574,7 +557,6 @@ void loop()
   // --- Parameter adjustment via encoder ---
   if (delta != 0)
   {
-    // Adjust parameter based on encoder mode
     switch (encoderMode)
     {
     case MODE_BPM:
@@ -679,8 +661,8 @@ void loop()
     case MODE_RHYTHM:
       selectedRhythmPattern += delta;
       if (selectedRhythmPattern < 0)
-        selectedRhythmPattern = RHYTHM_COUNT - 1;
-      if (selectedRhythmPattern >= RHYTHM_COUNT)
+        selectedRhythmPattern = rhythmPatternCount - 1;
+      if (selectedRhythmPattern >= rhythmPatternCount)
         selectedRhythmPattern = 0;
       Serial.print("Rhythm Pattern: ");
       Serial.println(rhythmPatternNames[selectedRhythmPattern]);
@@ -858,14 +840,20 @@ void loop()
     size_t noteIndex = currentNoteIndex % chordSize;
     notesOn = stepNotes[noteIndex].notes;
 
-    // --- Rhythm velocity calculation ---
+    // --- Rhythm velocity calculation using pattern generator ---
+    std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
+    // Normalize pattern indices to [0.1, 1.0]
     float rhythmMult = 1.0f;
-    if (selectedRhythmPattern >= 0 && selectedRhythmPattern < RHYTHM_COUNT)
-    {
-      int rhythmStep = currentNoteIndex % rhythmPatternLength;
-      rhythmMult = rhythmPatterns[selectedRhythmPattern][rhythmStep];
+    if (!rhythmPatternIndices.empty()) {
+      uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
+      if (maxIdx > minIdx) {
+        rhythmMult = 0.1f + 0.9f * (float)(idx - minIdx) / (float)(maxIdx - minIdx);
+      } else {
+        rhythmMult = 1.0f;
+      }
     }
-    // Combine with global velocity, clamp to 64-127
     uint8_t rhythmVelocity = constrain((int)(noteVelocity * rhythmMult), 64, 127);
 
     // Send all notes in this step (chord or single note)
@@ -1053,6 +1041,9 @@ void loop()
       break;
     case MODE_RANDOM_CHORD:
       Serial.println("Random Chord Percent");
+      break;
+    case MODE_RHYTHM:
+      Serial.println("Rhythm Pattern");
       break;
     }
     lastMode = encoderMode;
