@@ -731,9 +731,9 @@ void loop()
     }
     else if (octaveRange < 0)
     {
-      octStart = 0;
-      octEnd = octaveRange;
-      octStep = -1;
+      octStart = octaveRange;
+      octEnd = 0;
+      octStep = 1;
     }
     else
     {
