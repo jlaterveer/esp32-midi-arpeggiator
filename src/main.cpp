@@ -841,7 +841,7 @@ void loop()
 
     // --- Rhythm velocity calculation using pattern generator ---
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
-    // Normalize pattern indices to [0.1, 1.0]
+    // Invert mapping: 0 is loudest (1.0), max is softest (0.1)
     float rhythmMult = 1.0f;
     if (!rhythmPatternIndices.empty())
     {
@@ -850,7 +850,9 @@ void loop()
       uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
       if (maxIdx > minIdx)
       {
-        rhythmMult = 0.1f + 0.9f * (float)(idx - minIdx) / (float)(maxIdx - minIdx);
+        // Inverted: 0 -> 1.0, max -> 0.1
+        rhythmMult = 1.0f - 0.9f * (float)(idx - minIdx) / (float)(maxIdx - minIdx);
+        rhythmMult = std::max(0.1f, rhythmMult); // Clamp to at least 0.1
       }
       else
       {
