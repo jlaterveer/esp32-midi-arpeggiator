@@ -41,6 +41,17 @@ unsigned char rotary_process()
   return (state & 0x30);
 }
 
+// --- RHYTHM PATTERNS ---
+// Use pattern generators for rhythm accents instead of static arrays
+int selectedRhythmPattern = 0;                // Index into pattern generators for rhythm
+const int rhythmPatternCount = PAT_COUNT - 1; // Use all except PAT_ASPLAYED
+
+const char *rhythmPatternNames[rhythmPatternCount] = {
+    "Up", "Down", "Up-Down", "Down-Up", "Outer-In", "Inward Bounce", "Zigzag", "Spiral", "Mirror", "Saw", "Saw Reverse",
+    "Bounce", "Reverse Bounce", "Ladder", "Skip Up", "Jump Step", "Crossover", "Random", "Even-Odd", "Odd-Even",
+    "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
+    "Backward Jump", "Inside Bounce", "Staggered Rise"};
+
 // --- ENCODER MODES ---
 // List of all editable parameters for the encoder
 enum EncoderMode
@@ -60,10 +71,11 @@ enum EncoderMode
   MODE_HUMANIZE,
   MODE_LENGTH_RANDOMIZE,
   MODE_BALANCE,
-  MODE_RANDOM_CHORD // New mode: random steps replaced by 3-note chords
+  MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
+  MODE_RHYTHM        // Rhythm accent pattern selection
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 16; // Updated to match new mode count
+const int encoderModeSize = 17; // Updated to match new mode count
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -544,7 +556,6 @@ void loop()
   // --- Parameter adjustment via encoder ---
   if (delta != 0)
   {
-    // Adjust parameter based on encoder mode
     switch (encoderMode)
     {
     case MODE_BPM:
@@ -645,6 +656,15 @@ void loop()
       break;
     case MODE_RANDOM_CHORD:
       randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
+      break;
+    case MODE_RHYTHM:
+      selectedRhythmPattern += delta;
+      if (selectedRhythmPattern < 0)
+        selectedRhythmPattern = rhythmPatternCount - 1;
+      if (selectedRhythmPattern >= rhythmPatternCount)
+        selectedRhythmPattern = 0;
+      Serial.print("Rhythm Pattern: ");
+      Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -819,15 +839,37 @@ void loop()
     size_t noteIndex = currentNoteIndex % chordSize;
     notesOn = stepNotes[noteIndex].notes;
 
+    // --- Rhythm velocity calculation using pattern generator ---
+    std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
+    // Invert mapping: 0 is loudest (1.0), max is softest (0.1)
+    float rhythmMult = 1.0f;
+    if (!rhythmPatternIndices.empty())
+    {
+      uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
+      if (maxIdx > minIdx)
+      {
+        // Inverted: 0 -> 1.0, max -> 0.1
+        rhythmMult = 1.0f - 0.9f * (float)(idx - minIdx) / (float)(maxIdx - minIdx);
+        rhythmMult = std::max(0.1f, rhythmMult); // Clamp to at least 0.1
+      }
+      else
+      {
+        rhythmMult = 1.0f;
+      }
+    }
+    uint8_t rhythmVelocity = constrain((int)(noteVelocity * rhythmMult), 64, 127);
+
     // Send all notes in this step (chord or single note)
     for (uint8_t n : notesOn)
     {
       int transposedNote = constrain(n + 12 * transpose, 0, 127);
-      uint8_t v = velocityToSend;
+      uint8_t v = rhythmVelocity;
       if (velocityDynamicsPercent > 0)
       {
-        int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
-        v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
+        int maxAdjustment = (v * velocityDynamicsPercent) / 100;
+        v = constrain(v - random(0, maxAdjustment + 1), 64, 127);
       }
       sendNoteOn(transposedNote, v);
     }
@@ -871,6 +913,7 @@ void loop()
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   static int lastNoteBalancePercent = noteBalancePercent;
   static int lastRandomChordPercent = randomChordPercent;
+  static int lastRhythmPattern = selectedRhythmPattern;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -944,6 +987,12 @@ void loop()
     Serial.println(randomChordPercent);
     lastRandomChordPercent = randomChordPercent;
   }
+  if (encoderMode == MODE_RHYTHM && selectedRhythmPattern != lastRhythmPattern)
+  {
+    Serial.print("Rhythm Pattern: ");
+    Serial.println(rhythmPatternNames[selectedRhythmPattern]);
+    lastRhythmPattern = selectedRhythmPattern;
+  }
 
   if (encoderMode != lastMode)
   {
@@ -997,6 +1046,9 @@ void loop()
       break;
     case MODE_RANDOM_CHORD:
       Serial.println("Random Chord Percent");
+      break;
+    case MODE_RHYTHM:
+      Serial.println("Rhythm Pattern");
       break;
     }
     lastMode = encoderMode;
