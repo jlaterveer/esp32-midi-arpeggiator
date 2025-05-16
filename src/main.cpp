@@ -41,6 +41,36 @@ unsigned char rotary_process()
   return (state & 0x30);
 }
 
+// --- RHYTHM PATTERNS ---
+enum RhythmPattern {
+  RHYTHM_STRAIGHT,
+  RHYTHM_WALTZ,
+  RHYTHM_SYNCOPATED,
+  RHYTHM_OFFBEAT,
+  RHYTHM_CUSTOM,
+  RHYTHM_COUNT
+};
+
+const char* rhythmPatternNames[RHYTHM_COUNT] = {
+  "Straight", "Waltz", "Syncopated", "Offbeat", "Custom"
+};
+
+// Each rhythm pattern is an array of multipliers (0.0-1.0, will be scaled to 64-127)
+const float rhythmPatterns[RHYTHM_COUNT][8] = {
+  // RHYTHM_STRAIGHT: all accented
+  {1, 1, 1, 1, 1, 1, 1, 1},
+  // RHYTHM_WALTZ: strong-weak-weak
+  {1, 0.3, 0.3, 1, 0.3, 0.3, 1, 0.3},
+  // RHYTHM_SYNCOPATED: accent on 2 and 4
+  {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
+  // RHYTHM_OFFBEAT: accent offbeats
+  {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
+  // RHYTHM_CUSTOM: user-editable (default to straight)
+  {1, 1, 1, 1, 1, 1, 1, 1}
+};
+int selectedRhythmPattern = 0;
+const int rhythmPatternLength = 8;
+
 // --- ENCODER MODES ---
 // List of all editable parameters for the encoder
 enum EncoderMode
@@ -60,10 +90,11 @@ enum EncoderMode
   MODE_HUMANIZE,
   MODE_LENGTH_RANDOMIZE,
   MODE_BALANCE,
-  MODE_RANDOM_CHORD // New mode: random steps replaced by 3-note chords
+  MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
+  MODE_RHYTHM // <-- Add rhythm mode
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 16; // Updated to match new mode count
+const int encoderModeSize = 17; // Updated to match new mode count
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -646,6 +677,15 @@ void loop()
     case MODE_RANDOM_CHORD:
       randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
       break;
+    case MODE_RHYTHM:
+      selectedRhythmPattern += delta;
+      if (selectedRhythmPattern < 0)
+        selectedRhythmPattern = RHYTHM_COUNT - 1;
+      if (selectedRhythmPattern >= RHYTHM_COUNT)
+        selectedRhythmPattern = 0;
+      Serial.print("Rhythm Pattern: ");
+      Serial.println(rhythmPatternNames[selectedRhythmPattern]);
+      break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
@@ -819,15 +859,24 @@ void loop()
     size_t noteIndex = currentNoteIndex % chordSize;
     notesOn = stepNotes[noteIndex].notes;
 
+    // --- Rhythm velocity calculation ---
+    float rhythmMult = 1.0f;
+    if (selectedRhythmPattern >= 0 && selectedRhythmPattern < RHYTHM_COUNT) {
+      int rhythmStep = currentNoteIndex % rhythmPatternLength;
+      rhythmMult = rhythmPatterns[selectedRhythmPattern][rhythmStep];
+    }
+    // Combine with global velocity, clamp to 64-127
+    uint8_t rhythmVelocity = constrain((int)(noteVelocity * rhythmMult), 64, 127);
+
     // Send all notes in this step (chord or single note)
     for (uint8_t n : notesOn)
     {
       int transposedNote = constrain(n + 12 * transpose, 0, 127);
-      uint8_t v = velocityToSend;
+      uint8_t v = rhythmVelocity;
       if (velocityDynamicsPercent > 0)
       {
-        int maxAdjustment = (noteVelocity * velocityDynamicsPercent) / 100;
-        v = constrain(noteVelocity - random(0, maxAdjustment + 1), 1, 127);
+        int maxAdjustment = (v * velocityDynamicsPercent) / 100;
+        v = constrain(v - random(0, maxAdjustment + 1), 64, 127);
       }
       sendNoteOn(transposedNote, v);
     }
@@ -871,6 +920,7 @@ void loop()
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   static int lastNoteBalancePercent = noteBalancePercent;
   static int lastRandomChordPercent = randomChordPercent;
+  static int lastRhythmPattern = selectedRhythmPattern;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -943,6 +993,12 @@ void loop()
     Serial.print("Random Chord Percent: ");
     Serial.println(randomChordPercent);
     lastRandomChordPercent = randomChordPercent;
+  }
+  if (encoderMode == MODE_RHYTHM && selectedRhythmPattern != lastRhythmPattern)
+  {
+    Serial.print("Rhythm Pattern: ");
+    Serial.println(rhythmPatternNames[selectedRhythmPattern]);
+    lastRhythmPattern = selectedRhythmPattern;
   }
 
   if (encoderMode != lastMode)
