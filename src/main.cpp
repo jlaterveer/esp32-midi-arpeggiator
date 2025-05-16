@@ -42,7 +42,8 @@ unsigned char rotary_process()
 }
 
 // --- RHYTHM PATTERNS ---
-enum RhythmPattern {
+enum RhythmPattern
+{
   RHYTHM_STRAIGHT,
   RHYTHM_WALTZ,
   RHYTHM_SYNCOPATED,
@@ -51,23 +52,21 @@ enum RhythmPattern {
   RHYTHM_COUNT
 };
 
-const char* rhythmPatternNames[RHYTHM_COUNT] = {
-  "Straight", "Waltz", "Syncopated", "Offbeat", "Custom"
-};
+const char *rhythmPatternNames[RHYTHM_COUNT] = {
+    "Straight", "Waltz", "Syncopated", "Offbeat", "Custom"};
 
 // Each rhythm pattern is an array of multipliers (0.0-1.0, will be scaled to 64-127)
 const float rhythmPatterns[RHYTHM_COUNT][8] = {
-  // RHYTHM_STRAIGHT: all accented
-  {1, 1, 1, 1, 1, 1, 1, 1},
-  // RHYTHM_WALTZ: strong-weak-weak
-  {1, 0.3, 0.3, 1, 0.3, 0.3, 1, 0.3},
-  // RHYTHM_SYNCOPATED: accent on 2 and 4
-  {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
-  // RHYTHM_OFFBEAT: accent offbeats
-  {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
-  // RHYTHM_CUSTOM: user-editable (default to straight)
-  {1, 1, 1, 1, 1, 1, 1, 1}
-};
+    // RHYTHM_STRAIGHT: all accented
+    {1, 1, 1, 1, 1, 1, 1, 1},
+    // RHYTHM_WALTZ: strong-weak-weak
+    {1, 0.3, 0.3, 1, 0.3, 0.3, 1, 0.3},
+    // RHYTHM_SYNCOPATED: accent on 2 and 4
+    {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
+    // RHYTHM_OFFBEAT: accent offbeats
+    {0.3, 1, 0.3, 1, 0.3, 1, 0.3, 1},
+    // RHYTHM_CUSTOM: user-editable (default to straight)
+    {1, 1, 1, 1, 1, 1, 1, 1}};
 int selectedRhythmPattern = 0;
 const int rhythmPatternLength = 8;
 
@@ -91,7 +90,7 @@ enum EncoderMode
   MODE_LENGTH_RANDOMIZE,
   MODE_BALANCE,
   MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
-  MODE_RHYTHM // <-- Add rhythm mode
+  MODE_RHYTHM        // <-- Add rhythm mode
 };
 EncoderMode encoderMode = MODE_BPM;
 const int encoderModeSize = 17; // Updated to match new mode count
@@ -861,7 +860,8 @@ void loop()
 
     // --- Rhythm velocity calculation ---
     float rhythmMult = 1.0f;
-    if (selectedRhythmPattern >= 0 && selectedRhythmPattern < RHYTHM_COUNT) {
+    if (selectedRhythmPattern >= 0 && selectedRhythmPattern < RHYTHM_COUNT)
+    {
       int rhythmStep = currentNoteIndex % rhythmPatternLength;
       rhythmMult = rhythmPatterns[selectedRhythmPattern][rhythmStep];
     }
