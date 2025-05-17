@@ -219,6 +219,11 @@ int selectedPatternIndex = 0;
 
 // --- STATE ---
 // Chord and note state
+// baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
+// playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
+// orderedChord: The chord after sorting and deduplication (used for most patterns).
+// playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
+// stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
 std::vector<uint8_t> currentChord; // Latched chord
 std::vector<uint8_t> tempChord;    // Chord being captured
 uint8_t leadNote = 0;              // First note of chord
@@ -700,16 +705,18 @@ void loop()
   }
 
   // --- Chord processing ---
+  // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
   std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
 
-  // Remove duplicates, preserving order for PLAYED pattern
+  // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
   std::vector<uint8_t> playedChord = baseChord;
 
-  // For other patterns, create a sorted, deduplicated chord
+  // orderedChord: The chord after sorting and deduplication (used for most patterns).
   std::vector<uint8_t> orderedChord = playedChord;
   std::sort(orderedChord.begin(), orderedChord.end());
 
   // --- Build the playingChord with octave shifts and no duplicates using selected pattern
+  // playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
   std::vector<uint8_t> patternIndices;
   // Always use the selected pattern, regardless of encoder mode
   if (selectedPatternIndex >= 0 && selectedPatternIndex < PAT_COUNT)
@@ -819,6 +826,7 @@ void loop()
   applyNoteBiasToChord(playingChord, noteBalancePercent);
 
   // --- Build stepNotes for random chord steps ---
+  // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
   std::vector<StepNotes> stepNotes;
   buildRandomChordSteps(stepNotes, playingChord, playedChord, randomChordPercent);
 
