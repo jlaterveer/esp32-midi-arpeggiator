@@ -72,10 +72,11 @@ enum EncoderMode
   MODE_LENGTH_RANDOMIZE,
   MODE_BALANCE,
   MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
-  MODE_RHYTHM        // Rhythm accent pattern selection
+  MODE_RHYTHM,       // Rhythm accent pattern selection
+  MODE_RANGE         // Range shift for lowest/highest note
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 17; // Updated to match new mode count
+const int encoderModeSize = 18; // Updated to match new mode count
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -106,6 +107,7 @@ int noteLengthRandomizePercent = 20; // Note length randomization percent
 const int maxNoteLengthRandomizePercent = 100;
 int noteBalancePercent = 0; // Note bias percent
 int randomChordPercent = 0; // Percentage of steps to replace with random 3-note chords
+int noteRangeShift = 0;     // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -221,7 +223,7 @@ int selectedPatternIndex = 0;
 // Chord and note state
 // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
 // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
-// orderedChord: The chord after sorting and deduplication (used for most patterns).
+// orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
 // playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
 // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
 std::vector<uint8_t> currentChord; // Latched chord
@@ -323,6 +325,9 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     break;
   case 17: // CC17 -> Rhythm Pattern
     selectedRhythmPattern = constrain(map(value, 0, 127, 0, rhythmPatternCount - 1), 0, rhythmPatternCount - 1);
+    break;
+  case 18:                                        // CC18 -> Range Shift
+    noteRangeShift = map(value, 0, 127, -24, 24); // or -127,127 if you want full range
     break;
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
@@ -674,6 +679,11 @@ void loop()
       Serial.print("Rhythm Pattern: ");
       Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
+    case MODE_RANGE:
+      noteRangeShift = constrain(noteRangeShift + delta, -24, 24); // or -127,127 if you want
+      Serial.print("Range Shift: ");
+      Serial.println(noteRangeShift);
+      break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
   }
@@ -711,9 +721,49 @@ void loop()
   // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
   std::vector<uint8_t> playedChord = baseChord;
 
-  // orderedChord: The chord after sorting and deduplication (used for most patterns).
+  // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
   std::vector<uint8_t> orderedChord = playedChord;
   std::sort(orderedChord.begin(), orderedChord.end());
+  // Remove duplicates from orderedChord
+  orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+
+  // --- Apply range shift to orderedChord before building pattern indices ---
+  // When noteRangeShift > 0, shift up by removing the lowest note and adding oldLowest+12 (clamped), for each step.
+  // When noteRangeShift < 0, shift down by removing the highest note and adding oldHighest-12 (clamped), for each step.
+  if (noteRangeShift > 0)
+  {
+    for (int i = 0; i < noteRangeShift; ++i)
+    {
+      if (!orderedChord.empty())
+      {
+        std::sort(orderedChord.begin(), orderedChord.end());
+        uint8_t oldLowest = orderedChord.front();
+        orderedChord.erase(orderedChord.begin());
+        uint8_t newNote = constrain(oldLowest + 12, 0, 127);
+        orderedChord.push_back(newNote);
+        std::sort(orderedChord.begin(), orderedChord.end());
+        // Remove duplicates again in case newNote already exists
+        // orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+      }
+    }
+  }
+  else if (noteRangeShift < 0)
+  {
+    for (int i = 0; i < -noteRangeShift; ++i)
+    {
+      if (!orderedChord.empty())
+      {
+        std::sort(orderedChord.begin(), orderedChord.end());
+        uint8_t oldHighest = orderedChord.back();
+        orderedChord.pop_back();
+        int newNote = constrain(static_cast<int>(oldHighest) - 12, 0, 127);
+        orderedChord.insert(orderedChord.begin(), newNote);
+        std::sort(orderedChord.begin(), orderedChord.end());
+        // Remove duplicates again in case newNote already exists
+        // orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+      }
+    }
+  }
 
   // --- Build the playingChord with octave shifts and no duplicates using selected pattern
   // playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
@@ -925,6 +975,7 @@ void loop()
   static int lastNoteBalancePercent = noteBalancePercent;
   static int lastRandomChordPercent = randomChordPercent;
   static int lastRhythmPattern = selectedRhythmPattern;
+  static int lastNoteRangeShift = noteRangeShift;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -1004,6 +1055,12 @@ void loop()
     Serial.println(rhythmPatternNames[selectedRhythmPattern]);
     lastRhythmPattern = selectedRhythmPattern;
   }
+  if (encoderMode == MODE_RANGE && noteRangeShift != lastNoteRangeShift)
+  {
+    Serial.print("Range Shift: ");
+    Serial.println(noteRangeShift);
+    lastNoteRangeShift = noteRangeShift;
+  }
 
   if (encoderMode != lastMode)
   {
@@ -1060,6 +1117,9 @@ void loop()
       break;
     case MODE_RHYTHM:
       Serial.println("Rhythm Pattern");
+      break;
+    case MODE_RANGE:
+      Serial.println("Range Shift");
       break;
     }
     lastMode = encoderMode;
