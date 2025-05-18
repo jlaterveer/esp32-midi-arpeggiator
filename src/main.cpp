@@ -109,7 +109,7 @@ const int maxNoteLengthRandomizePercent = 100;
 int noteBalancePercent = 0; // Note bias percent
 int randomChordPercent = 0; // Percentage of steps to replace with random 3-note chords
 int noteRangeShift = 0;     // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
-int noteRangeStretch = 0;   // Range stretch for adding notes up/down by octaves
+int noteRangeStretch = 0;   // Range stretch for lowest/highest note, -8..8
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
