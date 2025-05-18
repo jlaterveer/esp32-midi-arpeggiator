@@ -332,7 +332,7 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     noteRangeShift = map(value, 0, 127, -24, 24);
     break;
   case 19: // CC19 -> Range Stretch
-    noteRangeStretch = map(value, 0, 127, -8, 8);
+    noteRangeStretch = map(value, 0, 127, -24, 24);
     break;
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
@@ -690,7 +690,7 @@ void loop()
       Serial.println(noteRangeShift);
       break;
     case MODE_STRETCH:
-      noteRangeStretch = constrain(noteRangeStretch + delta, -8, 8);
+      noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
       Serial.print("Range Stretch: ");
       Serial.println(noteRangeStretch);
       break;
