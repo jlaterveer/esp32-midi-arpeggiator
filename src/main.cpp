@@ -73,10 +73,11 @@ enum EncoderMode
   MODE_BALANCE,
   MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
   MODE_RHYTHM,       // Rhythm accent pattern selection
-  MODE_RANGE         // Range shift for lowest/highest note
+  MODE_RANGE,        // Range shift for lowest/highest note
+  MODE_STRETCH       // Stretch pattern up/down by adding notes
 };
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 18; // Updated to match new mode count
+const int encoderModeSize = 19; // Updated to match new mode count
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -108,6 +109,7 @@ const int maxNoteLengthRandomizePercent = 100;
 int noteBalancePercent = 0; // Note bias percent
 int randomChordPercent = 0; // Percentage of steps to replace with random 3-note chords
 int noteRangeShift = 0;     // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
+int noteRangeStretch = 0;   // Range stretch for adding notes up/down by octaves
 
 const int minOctave = -3, maxOctave = 3;
 const int minTranspose = -3, maxTranspose = 3;
@@ -326,8 +328,11 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 17: // CC17 -> Rhythm Pattern
     selectedRhythmPattern = constrain(map(value, 0, 127, 0, rhythmPatternCount - 1), 0, rhythmPatternCount - 1);
     break;
-  case 18:                                        // CC18 -> Range Shift
-    noteRangeShift = map(value, 0, 127, -24, 24); // or -127,127 if you want full range
+  case 18: // CC18 -> Range Shift
+    noteRangeShift = map(value, 0, 127, -24, 24);
+    break;
+  case 19: // CC19 -> Range Stretch
+    noteRangeStretch = map(value, 0, 127, -8, 8);
     break;
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
@@ -680,9 +685,14 @@ void loop()
       Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
     case MODE_RANGE:
-      noteRangeShift = constrain(noteRangeShift + delta, -24, 24); // or -127,127 if you want
+      noteRangeShift = constrain(noteRangeShift + delta, -24, 24);
       Serial.print("Range Shift: ");
       Serial.println(noteRangeShift);
+      break;
+    case MODE_STRETCH:
+      noteRangeStretch = constrain(noteRangeStretch + delta, -8, 8);
+      Serial.print("Range Stretch: ");
+      Serial.println(noteRangeStretch);
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -761,6 +771,42 @@ void loop()
         std::sort(orderedChord.begin(), orderedChord.end());
         // Remove duplicates again in case newNote already exists
         // orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+      }
+    }
+  }
+
+  // --- Apply range stretch to orderedChord before building pattern indices ---
+  // When noteRangeStretch > 0, add extra notes up by one octave above the lowest notes.
+  // When noteRangeStretch < 0, add extra notes down by one octave below the highest notes.
+  if (noteRangeStretch > 0)
+  {
+    for (int i = 0; i < noteRangeStretch; ++i)
+    {
+      if (!orderedChord.empty())
+      {
+        // Always use the i-th lowest note for each stretch step
+        std::sort(orderedChord.begin(), orderedChord.end());
+        uint8_t baseNote = orderedChord[i % orderedChord.size()];
+        uint8_t newNote = constrain(baseNote + 12, 0, 127);
+        orderedChord.push_back(newNote);
+        std::sort(orderedChord.begin(), orderedChord.end());
+        orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+      }
+    }
+  }
+  else if (noteRangeStretch < 0)
+  {
+    for (int i = 0; i < -noteRangeStretch; ++i)
+    {
+      if (!orderedChord.empty())
+      {
+        // Always use the i-th highest note for each stretch step
+        std::sort(orderedChord.begin(), orderedChord.end());
+        uint8_t baseNote = orderedChord[orderedChord.size() - 1 - (i % orderedChord.size())];
+        int newNote = constrain(static_cast<int>(baseNote) - 12, 0, 127);
+        orderedChord.insert(orderedChord.begin(), newNote);
+        std::sort(orderedChord.begin(), orderedChord.end());
+        orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
       }
     }
   }
@@ -976,6 +1022,7 @@ void loop()
   static int lastRandomChordPercent = randomChordPercent;
   static int lastRhythmPattern = selectedRhythmPattern;
   static int lastNoteRangeShift = noteRangeShift;
+  static int lastNoteRangeStretch = noteRangeStretch;
 
   if (encoderMode == MODE_BPM && bpm != lastBPM)
   {
@@ -1061,6 +1108,12 @@ void loop()
     Serial.println(noteRangeShift);
     lastNoteRangeShift = noteRangeShift;
   }
+  if (encoderMode == MODE_STRETCH && noteRangeStretch != lastNoteRangeStretch)
+  {
+    Serial.print("Range Stretch: ");
+    Serial.println(noteRangeStretch);
+    lastNoteRangeStretch = noteRangeStretch;
+  }
 
   if (encoderMode != lastMode)
   {
@@ -1120,6 +1173,9 @@ void loop()
       break;
     case MODE_RANGE:
       Serial.println("Range Shift");
+      break;
+    case MODE_STRETCH:
+      Serial.println("Range Stretch");
       break;
     }
     lastMode = encoderMode;
