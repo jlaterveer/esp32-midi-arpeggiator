@@ -590,10 +590,7 @@ void loop()
       break;
     case MODE_PATTERN:
       selectedPatternIndex += delta;
-      if (selectedPatternIndex < 0)
-        selectedPatternIndex = PAT_COUNT - 1;
-      if (selectedPatternIndex >= PAT_COUNT)
-        selectedPatternIndex = 0;
+      selectedPatternIndex = constrain(selectedPatternIndex, 0, PAT_COUNT - 1);
       Serial.print("Pattern: ");
       Serial.print(customPatternNames[selectedPatternIndex]);
       Serial.print(" [");
@@ -676,23 +673,19 @@ void loop()
       randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
       break;
     case MODE_RHYTHM:
-      selectedRhythmPattern += delta;
-      if (selectedRhythmPattern < 0)
-        selectedRhythmPattern = rhythmPatternCount - 1;
-      if (selectedRhythmPattern >= rhythmPatternCount)
-        selectedRhythmPattern = 0;
+      selectedRhythmPattern = constrain(selectedRhythmPattern + delta, 0, rhythmPatternCount - 1);
       Serial.print("Rhythm Pattern: ");
       Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
     case MODE_RANGE:
       noteRangeShift = constrain(noteRangeShift + delta, -24, 24);
-      Serial.print("Range Shift: ");
-      Serial.println(noteRangeShift);
+      //Serial.print("Range Shift: ");
+      //Serial.println(noteRangeShift);
       break;
     case MODE_STRETCH:
       noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
-      Serial.print("Range Stretch: ");
-      Serial.println(noteRangeStretch);
+      //Serial.print("Range Stretch: ");
+      //Serial.println(noteRangeStretch);
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
