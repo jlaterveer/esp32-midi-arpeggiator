@@ -379,9 +379,43 @@ void handleNoteOff(uint8_t note)
   }
 }
 
+// --- MIDI CLOCK SYNC ---
+volatile unsigned long clockTime = 0;
+volatile int clockCount = 0;
+float clockBpm = 120.0;
+volatile bool countTicks = false;
+
+void handleMidiClock()
+{
+  if (not countTicks) {
+    clockTime = millis();
+    countTicks = true;
+    neopixelWrite(ledBuiltIn, 0, 64, 0); // Red blink
+  }  
+  if (clockCount == 6) { // LED off after 6 ticks
+      neopixelWrite(ledBuiltIn, 0, 0, 0);
+  }
+  if (clockCount >= 24) {// 24 MIDI clocks per quarter note
+    countTicks = false;
+    unsigned long interval = millis() - clockTime;
+    if (interval > 0)
+    {
+      clockBpm = 60000.0f / (float)interval;
+      bpm = constrain((int)clockBpm, 40, 240);
+      arpInterval = 60000 / (bpm * notesPerBeat);
+    }
+    clockCount = 0;  
+  }
+  clockCount++;
+}
+
 // Parse incoming MIDI bytes (hardware MIDI in)
 void readMidiByte(uint8_t byte)
 {
+  if (byte == 0xF8) { // MIDI Clock
+    handleMidiClock();
+    return;
+  }
   if (byte & 0x80)
   {
     midiStatus = byte;
@@ -407,6 +441,8 @@ void readMidiByte(uint8_t byte)
     }
   }
 }
+
+
 
 // --- TIMING HUMANIZATION FUNCTION ---
 // Returns a random offset for note timing (ms)
@@ -700,6 +736,10 @@ void loop()
   while (usbMIDI.readPacket(&packet))
   {
     uint8_t cin = packet.header & 0x0F;
+    if (packet.byte1 == 0xF8) { // MIDI Clock
+      handleMidiClock();
+      continue;
+    }
     switch (cin)
     {
     case 0x09: // Note On
@@ -1002,6 +1042,7 @@ void loop()
     neopixelWrite(ledBuiltIn, 0, 0, 0);
     ledFlashing = false;
   }
+
 
   // --- Serial debug output for parameter changes ---
   static int lastBPM = bpm, lastLength = noteLengthPercent, lastVelocity = noteVelocity, lastOctave = octaveRange;
