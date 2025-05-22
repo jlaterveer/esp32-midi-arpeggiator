@@ -628,8 +628,8 @@ void loop()
       break;
     case MODE_RHYTHM:
       selectedRhythmPattern = constrain(selectedRhythmPattern + delta, 0, rhythmPatternCount - 1);
-      Serial.print("Rhythm Pattern: ");
-      Serial.println(rhythmPatternNames[selectedRhythmPattern]);
+      //Serial.print("Rhythm Pattern: ");
+      //Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
     case MODE_RANGE:
       noteRangeShift = constrain(noteRangeShift + delta, -24, 24);
