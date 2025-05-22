@@ -22,3 +22,31 @@ const int maxOctave = 3;
 const int minTranspose = -3;
 const int maxTranspose = 3;
 
+// Note resolution options (notes per beat)
+const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
+const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
+
+// --- ENCODER MODES ---
+// List of all editable parameters for the encoder
+enum EncoderMode
+{
+    MODE_BPM,
+    MODE_LENGTH,
+    MODE_VELOCITY,
+    MODE_OCTAVE,
+    MODE_PATTERN,
+    MODE_PATTERN_PLAYBACK,
+    MODE_REVERSE,
+    MODE_SMOOTH, // Pattern smooth mode
+    MODE_RESOLUTION,
+    MODE_REPEAT,
+    MODE_TRANSPOSE,
+    MODE_DYNAMICS,
+    MODE_HUMANIZE,
+    MODE_LENGTH_RANDOMIZE,
+    MODE_BALANCE,
+    MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
+    MODE_RHYTHM,       // Rhythm accent pattern selection
+    MODE_RANGE,        // Range shift for lowest/highest note
+    MODE_STRETCH       // Stretch pattern up/down by adding notes
+};
