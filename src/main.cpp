@@ -5,7 +5,7 @@
 #include <USBMIDI.h>
 #include "PatternGenerators.h"
 #include "Constants.h"
-#include "midiUtils.h"
+#include "MidiUtils.h"
 
 // EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
@@ -304,17 +304,6 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   }
   arpInterval = 60000 / (bpm * notesPerBeat);
 }
-
-// --- MIDI IN PARSING ---
-// MIDI parser state machine
-/*
-enum MidiState
-{
-  WaitingStatus,
-  WaitingData1,
-  WaitingData2
-};
-*/
 
 // --- TIMING HUMANIZATION FUNCTION ---
 // Returns a random offset for note timing (ms)
