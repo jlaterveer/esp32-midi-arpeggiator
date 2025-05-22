@@ -540,26 +540,6 @@ void loop()
     swHandled = false;
   }
 
-  // --- Add encoder switch for STRAIGHT/LOOP toggle ---
-  // Encoder switch long press: toggle pattern playback mode
-  static unsigned long encoderSWPressTime = 0;
-  static bool encoderSWPrev = false;
-  bool encoderSWNow = !digitalRead(encoderSW);
-  if (encoderSWNow && !encoderSWPrev)
-  {
-    encoderSWPressTime = millis();
-  }
-  if (!encoderSWNow && encoderSWPrev)
-  {
-    if (millis() - encoderSWPressTime > 500) // long press
-    {
-      patternPlaybackMode = (patternPlaybackMode == STRAIGHT) ? LOOP : STRAIGHT;
-      Serial.print("Pattern Playback Mode: ");
-      Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
-    }
-  }
-  encoderSWPrev = encoderSWNow;
-
   // --- Rotary encoder processing ---
   unsigned char result = rotary_process();
   static int stepCounter = 0;
@@ -683,13 +663,9 @@ void loop()
       break;
     case MODE_RANGE:
       noteRangeShift = constrain(noteRangeShift + delta, -24, 24);
-      // Serial.print("Range Shift: ");
-      // Serial.println(noteRangeShift);
       break;
     case MODE_STRETCH:
       noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
-      // Serial.print("Range Stretch: ");
-      // Serial.println(noteRangeStretch);
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -736,6 +712,7 @@ void loop()
   // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
   std::vector<uint8_t> orderedChord = playedChord;
   std::sort(orderedChord.begin(), orderedChord.end());
+
   // Remove duplicates from orderedChord
   orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
 
