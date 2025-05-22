@@ -1002,67 +1002,31 @@ void loop()
 
   if (encoderMode != lastMode)
   {
+    static const char *modeNames[] = {
+        "BPM",
+        "Note Length %",
+        "Velocity",
+        "Octave Range",
+        "Pattern",
+        "Pattern Playback Mode",
+        "Pattern Reverse",
+        "Pattern Smooth",
+        "Notes Per Beat",
+        "Note Repeat",
+        "Transpose",
+        "Velocity Dynamics Percent",
+        "Timing Humanize Percent",
+        "Note Length Randomize Percent",
+        "Note Balance Percent",
+        "Random Chord Percent",
+        "Rhythm Pattern",
+        "Range Shift",
+        "Range Stretch"};
     Serial.print("Encoder Mode: ");
-    switch (encoderMode)
-    {
-    case MODE_BPM:
-      Serial.println("BPM");
-      break;
-    case MODE_LENGTH:
-      Serial.println("Note Length %");
-      break;
-    case MODE_VELOCITY:
-      Serial.println("Velocity");
-      break;
-    case MODE_OCTAVE:
-      Serial.println("Octave Range");
-      break;
-    case MODE_PATTERN:
-      Serial.println("Pattern");
-      break;
-    case MODE_PATTERN_PLAYBACK:
-      Serial.println("Pattern Playback Mode");
-      break;
-    case MODE_REVERSE:
-      Serial.println("Pattern Reverse");
-      break;
-    case MODE_SMOOTH:
-      Serial.println("Pattern Smooth");
-      break;
-    case MODE_RESOLUTION:
-      Serial.println("Notes Per Beat");
-      break;
-    case MODE_REPEAT:
-      Serial.println("Note Repeat");
-      break;
-    case MODE_TRANSPOSE:
-      Serial.println("Transpose");
-      break;
-    case MODE_DYNAMICS:
-      Serial.println("Velocity Dynamics Percent");
-      break;
-    case MODE_HUMANIZE:
-      Serial.println("Timing Humanize Percent");
-      break;
-    case MODE_LENGTH_RANDOMIZE:
-      Serial.println("Note Length Randomize Percent");
-      break;
-    case MODE_BALANCE:
-      Serial.println("Note Balance Percent");
-      break;
-    case MODE_RANDOM_CHORD:
-      Serial.println("Random Chord Percent");
-      break;
-    case MODE_RHYTHM:
-      Serial.println("Rhythm Pattern");
-      break;
-    case MODE_RANGE:
-      Serial.println("Range Shift");
-      break;
-    case MODE_STRETCH:
-      Serial.println("Range Stretch");
-      break;
-    }
+    if (encoderMode >= 0 && encoderMode < (int)(sizeof(modeNames) / sizeof(modeNames[0])))
+      Serial.println(modeNames[encoderMode]);
+    else
+      Serial.println("Unknown");
     lastMode = encoderMode;
   }
 }
