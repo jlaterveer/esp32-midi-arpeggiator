@@ -26,6 +26,11 @@ const int maxTranspose = 3;
 const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
 const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
 
+// extern variables
+extern int bpm;
+extern unsigned long arpInterval;
+extern int notesPerBeat;
+
 // --- ENCODER MODES ---
 // List of all editable parameters for the encoder
 enum EncoderMode

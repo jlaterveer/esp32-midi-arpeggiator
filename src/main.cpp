@@ -346,37 +346,7 @@ void handleNoteOff(uint8_t note)
 }
 
 // --- MIDI CLOCK SYNC ---
-volatile unsigned long clockTime = 0;
-volatile int clockCount = 0;
-float clockBpm = 120.0;
-volatile bool countTicks = false;
-
-void handleMidiClock()
-{
-  if (not countTicks)
-  {
-    clockTime = millis();
-    countTicks = true;
-    neopixelWrite(ledBuiltIn, 0, 64, 0); // Red blink
-  }
-  if (clockCount == 6)
-  { // LED off after 6 ticks
-    neopixelWrite(ledBuiltIn, 0, 0, 0);
-  }
-  if (clockCount >= 24)
-  { // 24 MIDI clocks per quarter note
-    countTicks = false;
-    unsigned long interval = millis() - clockTime;
-    if (interval > 0)
-    {
-      clockBpm = 60000.0f / (float)interval;
-      bpm = constrain((int)clockBpm, 40, 240);
-      arpInterval = 60000 / (bpm * notesPerBeat);
-    }
-    clockCount = 0;
-  }
-  clockCount++;
-}
+#include "midiUtils.h"
 
 // Parse incoming MIDI bytes (hardware MIDI in)
 void readMidiByte(uint8_t byte)
