@@ -91,15 +91,29 @@ bool patternSmooth = true;
 // All arpeggiator parameters
 // (moved to Constants.h)
 
-// const int minOctave = -3, maxOctave = 3;
-// const int minTranspose = -3, maxTranspose = 3;
+// --- DEFAULTS ---
+int bpm = 96;                        // Beats per minute
+int noteLengthPercent = 40;          // Note length as percent of interval
+int noteVelocity = 127;              // MIDI velocity
+int octaveRange = 0;                 // Octave spread
+int transpose = 0;                   // Transpose in octaves
+int velocityDynamicsPercent = 56;    // Velocity randomization percent
+bool timingHumanize = false;         // Enable timing humanization
+int timingHumanizePercent = 4;       // Humanization percent
+int noteLengthRandomizePercent = 20; // Note length randomization percent
+int noteBalancePercent = 0;          // Note bias percent
+int randomChordPercent = 0;          // Percentage of steps to replace with random 3-note chords
+int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
+int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
+int notesPerBeatIndex = 4;           // 4 notes per beat
+int noteRepeat = 1;                  // Number of repeats per note
 
 // Note resolution options (notes per beat)
 const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
 const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
-int notesPerBeatIndex = 4; // Default: 4 notes per beat
+
 int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-int noteRepeat = 1; // Number of repeats per note
+
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
 
