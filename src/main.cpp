@@ -472,6 +472,17 @@ void setup()
 
 // --- LOOP ---
 // Main loop: handle input, arpeggiator, and output
+template <typename T>
+void printIfChanged(const char *label, T &lastValue, T currentValue)
+{
+  if (currentValue != lastValue)
+  {
+    Serial.print(label);
+    Serial.println(currentValue);
+    lastValue = currentValue;
+  }
+}
+
 void loop()
 {
   unsigned long now = millis();
@@ -628,8 +639,8 @@ void loop()
       break;
     case MODE_RHYTHM:
       selectedRhythmPattern = constrain(selectedRhythmPattern + delta, 0, rhythmPatternCount - 1);
-      //Serial.print("Rhythm Pattern: ");
-      //Serial.println(rhythmPatternNames[selectedRhythmPattern]);
+      // Serial.print("Rhythm Pattern: ");
+      // Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
     case MODE_RANGE:
       noteRangeShift = constrain(noteRangeShift + delta, -24, 24);
@@ -973,97 +984,97 @@ void loop()
   static int lastNoteRangeShift = noteRangeShift;
   static int lastNoteRangeStretch = noteRangeStretch;
 
-  if (encoderMode == MODE_BPM && bpm != lastBPM)
-  {
-    Serial.print("BPM: ");
-    Serial.println(bpm);
-    lastBPM = bpm;
-  }
-  if (encoderMode == MODE_LENGTH && noteLengthPercent != lastLength)
-  {
-    Serial.print("Note Length %: ");
-    Serial.println(noteLengthPercent);
-    lastLength = noteLengthPercent;
-  }
-  if (encoderMode == MODE_VELOCITY && noteVelocity != lastVelocity)
-  {
-    Serial.print("Velocity: ");
-    Serial.println(noteVelocity);
-    lastVelocity = noteVelocity;
-  }
-  if (encoderMode == MODE_OCTAVE && octaveRange != lastOctave)
-  {
-    Serial.print("Octave Range: ");
-    Serial.println(octaveRange);
-    lastOctave = octaveRange;
-  }
-  if (encoderMode == MODE_RESOLUTION && notesPerBeatIndex != lastResolutionIndex)
-  {
-    Serial.print("Notes Per Beat: ");
-    Serial.println(notesPerBeat);
-    lastResolutionIndex = notesPerBeatIndex;
-  }
-  if (encoderMode == MODE_REPEAT && noteRepeat != lastNoteRepeat)
-  {
-    Serial.print("Note Repeat: ");
-    Serial.println(noteRepeat);
-    lastNoteRepeat = noteRepeat;
-  }
-  if (encoderMode == MODE_TRANSPOSE && transpose != lastTranspose)
-  {
-    Serial.print("Transpose: ");
-    Serial.println(transpose);
-    lastTranspose = transpose;
-  }
-  if (encoderMode == MODE_DYNAMICS && velocityDynamicsPercent != lastUseVelocityDynamics)
-  {
-    Serial.print("Velocity Dynamics Percent: ");
-    Serial.println(velocityDynamicsPercent);
-    lastUseVelocityDynamics = velocityDynamicsPercent;
-  }
-  if (encoderMode == MODE_HUMANIZE && timingHumanizePercent != lastTimingHumanizePercent)
-  {
-    Serial.print("Timing Humanize Percent: ");
-    Serial.println(timingHumanizePercent);
-    lastTimingHumanizePercent = timingHumanizePercent;
-  }
-  if (encoderMode == MODE_LENGTH_RANDOMIZE && noteLengthRandomizePercent != lastNoteLengthRandomizePercent)
-  {
-    Serial.print("Note Length Randomize Percent: ");
-    Serial.println(noteLengthRandomizePercent);
-    lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
-  }
-  if (encoderMode == MODE_BALANCE && noteBalancePercent != lastNoteBalancePercent)
-  {
-    Serial.print("Note Balance Percent: ");
-    Serial.println(noteBalancePercent);
-    lastNoteBalancePercent = noteBalancePercent;
-  }
-  if (encoderMode == MODE_RANDOM_CHORD && randomChordPercent != lastRandomChordPercent)
-  {
-    Serial.print("Random Chord Percent: ");
-    Serial.println(randomChordPercent);
-    lastRandomChordPercent = randomChordPercent;
-  }
-  if (encoderMode == MODE_RHYTHM && selectedRhythmPattern != lastRhythmPattern)
-  {
-    Serial.print("Rhythm Pattern: ");
-    Serial.println(rhythmPatternNames[selectedRhythmPattern]);
-    lastRhythmPattern = selectedRhythmPattern;
-  }
-  if (encoderMode == MODE_RANGE && noteRangeShift != lastNoteRangeShift)
-  {
-    Serial.print("Range Shift: ");
-    Serial.println(noteRangeShift);
-    lastNoteRangeShift = noteRangeShift;
-  }
-  if (encoderMode == MODE_STRETCH && noteRangeStretch != lastNoteRangeStretch)
-  {
-    Serial.print("Range Stretch: ");
-    Serial.println(noteRangeStretch);
-    lastNoteRangeStretch = noteRangeStretch;
-  }
+  printIfChanged("BPM: ", lastBPM, bpm);
+  printIfChanged("Note Length %: ", lastLength, noteLengthPercent);
+  printIfChanged("Velocity: ", lastVelocity, noteVelocity);
+  printIfChanged("Octave Range: ", lastOctave, octaveRange);
+  printIfChanged("Notes Per Beat: ", lastResolutionIndex, notesPerBeatIndex);
+  printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat);
+  printIfChanged("Transpose: ", lastTranspose, transpose);
+  printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent);
+  printIfChanged("Timing Humanize Percent: ", lastTimingHumanizePercent, timingHumanizePercent);
+  printIfChanged("Note Length Randomize Percent: ", lastNoteLengthRandomizePercent, noteLengthRandomizePercent);
+  printIfChanged("Note Balance Percent: ", lastNoteBalancePercent, noteBalancePercent);
+  printIfChanged("Random Chord Percent: ", lastRandomChordPercent, randomChordPercent);
+  printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern);
+  printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift);
+  printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch);
+  printIfChanged("Transpose: ", lastTranspose, transpose);
+  printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent);
+  printIfChanged("Timing Humanize Percent: ", lastTimingHumanizePercent, timingHumanizePercent);
+  printIfChanged("Note Length Randomize Percent: ", lastNoteLengthRandomizePercent, noteLengthRandomizePercent);
+  printIfChanged("Note Balance Percent: ", lastNoteBalancePercent, noteBalancePercent);
+  printIfChanged("Random Chord Percent: ", lastRandomChordPercent, randomChordPercent);
+  printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern);
+  printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift);
+  printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch);
 
+  if (encoderMode != lastMode)
+  {
+    Serial.print("Encoder Mode: ");
+    switch (encoderMode)
+    {
+    case MODE_BPM:
+      Serial.println("BPM");
+      break;
+    case MODE_LENGTH:
+      Serial.println("Note Length %");
+      break;
+    case MODE_VELOCITY:
+      Serial.println("Velocity");
+      break;
+    case MODE_OCTAVE:
+      Serial.println("Octave Range");
+      break;
+    case MODE_PATTERN:
+      Serial.println("Pattern");
+      break;
+    case MODE_PATTERN_PLAYBACK:
+      Serial.println("Pattern Playback Mode");
+      break;
+    case MODE_REVERSE:
+      Serial.println("Pattern Reverse");
+      break;
+    case MODE_SMOOTH:
+      Serial.println("Pattern Smooth");
+      break;
+    case MODE_RESOLUTION:
+      Serial.println("Notes Per Beat");
+      break;
+    case MODE_REPEAT:
+      Serial.println("Note Repeat");
+      break;
+    case MODE_TRANSPOSE:
+      Serial.println("Transpose");
+      break;
+    case MODE_DYNAMICS:
+      Serial.println("Velocity Dynamics Percent");
+      break;
+    case MODE_HUMANIZE:
+      Serial.println("Timing Humanize Percent");
+      break;
+    case MODE_LENGTH_RANDOMIZE:
+      Serial.println("Note Length Randomize Percent");
+      break;
+    case MODE_BALANCE:
+      Serial.println("Note Balance Percent");
+      break;
+    case MODE_RANDOM_CHORD:
+      Serial.println("Random Chord Percent");
+      break;
+    case MODE_RHYTHM:
+      Serial.println("Rhythm Pattern");
+      break;
+    case MODE_RANGE:
+      Serial.println("Range Shift");
+      break;
+    case MODE_STRETCH:
+      Serial.println("Range Stretch");
+      break;
+      Serial.println(noteRangeStretch);
+      lastNoteRangeStretch = noteRangeStretch;
+    }
+  }
   if (encoderMode != lastMode)
   {
     Serial.print("Encoder Mode: ");
