@@ -48,5 +48,6 @@ enum EncoderMode
     MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
     MODE_RHYTHM,       // Rhythm accent pattern selection
     MODE_RANGE,        // Range shift for lowest/highest note
-    MODE_STRETCH       // Stretch pattern up/down by adding notes
+    MODE_STRETCH,
+    MODE_COUNT // Stretch pattern up/down by adding notes
 };

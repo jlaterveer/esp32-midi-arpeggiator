@@ -45,10 +45,9 @@ const char *rhythmPatternNames[rhythmPatternCount] = {
     "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
     "Backward Jump", "Inside Bounce", "Staggered Rise"};
 
-
 EncoderMode encoderMode = MODE_BPM;
 
-const int encoderModeSize = 19; // Updated to match new mode count
+const int encoderModeSize = MODE_COUNT; // Use enum count for size
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
