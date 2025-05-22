@@ -212,30 +212,6 @@ const unsigned long ledFlashDuration = 100; // ms
 // --- MIDI I/O ---
 USBMIDI usbMIDI; // USB MIDI object
 
-// Send a single MIDI byte to hardware MIDI out
-void midiSendByte(uint8_t byte)
-{
-  Serial2.write(byte);
-}
-
-// Send MIDI note on to both hardware and USB MIDI
-void sendNoteOn(uint8_t note, uint8_t velocity)
-{
-  midiSendByte(0x90);
-  midiSendByte(note);
-  midiSendByte(velocity);
-  usbMIDI.noteOn(note, velocity, 1); // Channel 1
-}
-
-// Send MIDI note off to both hardware and USB MIDI
-void sendNoteOff(uint8_t note)
-{
-  midiSendByte(0x80);
-  midiSendByte(note);
-  midiSendByte(0);
-  usbMIDI.noteOff(note, 0, 1); // Channel 1
-}
-
 // --- MIDI CC PARAMETER CONTROL ---
 // Map MIDI CC numbers to parameter pointers or setters
 void handleMidiCC(uint8_t cc, uint8_t value)

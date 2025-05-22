@@ -1,5 +1,6 @@
-#include "midiUtils.h"
+#include "MidiUtils.h"
 #include "Constants.h"
+#include <USBMIDI.h>
 
 volatile unsigned long clockTime = 0;
 volatile int clockCount = 0;
@@ -104,4 +105,32 @@ void handleMidiClock()
   {
     clockCount++;
   }
+}
+
+// Provide access to usbMIDI object from main.cpp
+extern USBMIDI usbMIDI;
+extern HardwareSerial Serial2;
+
+// Send a single MIDI byte to hardware MIDI out
+void midiSendByte(uint8_t byte)
+{
+  Serial2.write(byte);
+}
+
+// Send MIDI note on to both hardware and USB MIDI
+void sendNoteOn(uint8_t note, uint8_t velocity)
+{
+  midiSendByte(0x90);
+  midiSendByte(note);
+  midiSendByte(velocity);
+  usbMIDI.noteOn(note, velocity, 1); // Channel 1
+}
+
+// Send MIDI note off to both hardware and USB MIDI
+void sendNoteOff(uint8_t note)
+{
+  midiSendByte(0x80);
+  midiSendByte(note);
+  midiSendByte(0);
+  usbMIDI.noteOff(note, 0, 1); // Channel 1
 }

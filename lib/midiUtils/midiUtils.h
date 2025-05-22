@@ -31,3 +31,7 @@ void handleMidiCC(uint8_t cc, uint8_t value);
 
 // MIDI clock sync handler
 void handleMidiClock();
+
+void midiSendByte(uint8_t byte);
+void sendNoteOn(uint8_t note, uint8_t velocity);
+void sendNoteOff(uint8_t note);
