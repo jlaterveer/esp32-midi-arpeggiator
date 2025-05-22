@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <vector>
 
 // --- CONFIGURATION ---
 // Pin assignments for MIDI, LED, encoder, and buttons
@@ -30,6 +31,14 @@ const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPe
 extern int bpm;
 extern unsigned long arpInterval;
 extern int notesPerBeat;
+
+// --- Extern declarations for arpeggiator/chord state (needed by midiUtils.cpp) ---
+extern bool capturingChord;
+extern std::vector<uint8_t> tempChord;
+extern uint8_t leadNote;
+extern std::vector<uint8_t> currentChord;
+extern size_t currentNoteIndex;
+extern int noteRepeatCounter;
 
 // --- ENCODER MODES ---
 // List of all editable parameters for the encoder

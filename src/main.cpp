@@ -5,6 +5,7 @@
 #include <USBMIDI.h>
 #include "PatternGenerators.h"
 #include "Constants.h"
+#include "midiUtils.h"
 
 // EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
@@ -306,81 +307,14 @@ void handleMidiCC(uint8_t cc, uint8_t value)
 
 // --- MIDI IN PARSING ---
 // MIDI parser state machine
+/*
 enum MidiState
 {
   WaitingStatus,
   WaitingData1,
   WaitingData2
 };
-MidiState midiState = WaitingStatus;
-uint8_t midiStatus, midiData1;
-
-// Handle incoming MIDI note on
-void handleNoteOn(uint8_t note)
-{
-  // Start capturing a new chord if not already capturing
-  if (!capturingChord)
-  {
-    capturingChord = true;
-    tempChord.clear();
-    leadNote = note;
-  }
-  // Add note to tempChord if not already present
-  if (std::find(tempChord.begin(), tempChord.end(), note) == tempChord.end())
-  {
-    tempChord.push_back(note);
-  }
-}
-
-// Handle incoming MIDI note off
-void handleNoteOff(uint8_t note)
-{
-  // Latch chord when lead note is released
-  if (capturingChord && note == leadNote)
-  {
-    currentChord = tempChord;
-    capturingChord = false;
-    currentNoteIndex = 0;
-    noteRepeatCounter = 0;
-  }
-}
-
-// --- MIDI CLOCK SYNC ---
-#include "midiUtils.h"
-
-// Parse incoming MIDI bytes (hardware MIDI in)
-void readMidiByte(uint8_t byte)
-{
-  if (byte == 0xF8)
-  { // MIDI Clock
-    handleMidiClock();
-    return;
-  }
-  if (byte & 0x80)
-  {
-    midiStatus = byte;
-    midiState = WaitingData1;
-  }
-  else
-  {
-    switch (midiState)
-    {
-    case WaitingData1:
-      midiData1 = byte;
-      midiState = WaitingData2;
-      break;
-    case WaitingData2:
-      if ((midiStatus & 0xF0) == 0x90 && byte > 0)
-        handleNoteOn(midiData1);
-      else if ((midiStatus & 0xF0) == 0x80 || ((midiStatus & 0xF0) == 0x90 && byte == 0))
-        handleNoteOff(midiData1);
-      else if ((midiStatus & 0xF0) == 0xB0) // CC
-        handleMidiCC(midiData1, byte);
-      midiState = WaitingData1;
-      break;
-    }
-  }
-}
+*/
 
 // --- TIMING HUMANIZATION FUNCTION ---
 // Returns a random offset for note timing (ms)
@@ -431,6 +365,17 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   }
 }
 
+template <typename T>
+void printIfChanged(const char *label, T &lastValue, T currentValue)
+{
+  if (currentValue != lastValue)
+  {
+    Serial.print(label);
+    Serial.println(currentValue);
+    lastValue = currentValue;
+  }
+}
+
 // --- Encoder switch shift-register debounce ---
 // Debounce state for encoder switch
 static uint16_t encoderSWDebounce = 0;
@@ -472,17 +417,6 @@ void setup()
 
 // --- LOOP ---
 // Main loop: handle input, arpeggiator, and output
-template <typename T>
-void printIfChanged(const char *label, T &lastValue, T currentValue)
-{
-  if (currentValue != lastValue)
-  {
-    Serial.print(label);
-    Serial.println(currentValue);
-    lastValue = currentValue;
-  }
-}
-
 void loop()
 {
   unsigned long now = millis();
