@@ -5,7 +5,7 @@
 #include <USBMIDI.h>
 #include "PatternGenerators.h"
 #include "Constants.h"
-#include "MidiUtils.h"
+#include "midiUtils.h"
 
 // EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
@@ -369,9 +369,10 @@ void setup()
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN
   Serial2.begin(31250, SERIAL_8N1, -1, midiOutTxPin); // MIDI OUT
 
+  // USBDevice.setProductDescriptor("MyMIDIController"); // Removed: USBDevice is undefined on ESP32/Arduino
   USB.begin();
   usbMIDI.begin();
-
+  
   delay(1000);
 
   capturingChord = true;
