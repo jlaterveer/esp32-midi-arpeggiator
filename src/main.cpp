@@ -599,20 +599,21 @@ void loop()
   // --- Apply range shift to orderedChord before building pattern indices ---
   // When noteRangeShift > 0, shift up by removing the lowest note and adding oldLowest+12 (clamped), for each step.
   // When noteRangeShift < 0, shift down by removing the highest note and adding oldHighest-12 (clamped), for each step.
+  std::vector<uint8_t> shiftedChord = orderedChord;
   if (noteRangeShift > 0)
   {
     for (int i = 0; i < noteRangeShift; ++i)
     {
-      if (!orderedChord.empty())
+      if (!shiftedChord.empty())
       {
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t oldLowest = orderedChord.front();
-        orderedChord.erase(orderedChord.begin());
+        std::sort(shiftedChord.begin(), shiftedChord.end());
+        uint8_t oldLowest = shiftedChord.front();
+        shiftedChord.erase(shiftedChord.begin());
         uint8_t newNote = constrain(oldLowest + 12, 0, 127);
-        orderedChord.push_back(newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
+        shiftedChord.push_back(newNote);
+        std::sort(shiftedChord.begin(), shiftedChord.end());
         // Remove duplicates again in case newNote already exists
-        // orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        // shiftedChord.erase(std::unique(shiftedChord.begin(), shiftedChord.end()), shiftedChord.end());
       }
     }
   }
@@ -620,36 +621,37 @@ void loop()
   {
     for (int i = 0; i < -noteRangeShift; ++i)
     {
-      if (!orderedChord.empty())
+      if (!shiftedChord.empty())
       {
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t oldHighest = orderedChord.back();
-        orderedChord.pop_back();
+        std::sort(shiftedChord.begin(), shiftedChord.end());
+        uint8_t oldHighest = shiftedChord.back();
+        shiftedChord.pop_back();
         int newNote = constrain(static_cast<int>(oldHighest) - 12, 0, 127);
-        orderedChord.insert(orderedChord.begin(), newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
+        shiftedChord.insert(shiftedChord.begin(), newNote);
+        std::sort(shiftedChord.begin(), shiftedChord.end());
         // Remove duplicates again in case newNote already exists
-        // orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        // shiftedChord.erase(std::unique(shiftedChord.begin(), shiftedChord.end()), shiftedChord.end());
       }
     }
   }
 
-  // --- Apply range stretch to orderedChord before building pattern indices ---
+  // --- Apply range stretch to shiftedChord before building pattern indices ---
   // When noteRangeStretch > 0, add extra notes up by one octave above the lowest notes.
   // When noteRangeStretch < 0, add extra notes down by one octave below the highest notes.
+  std::vector<uint8_t> stretchedChord = shiftedChord;
   if (noteRangeStretch > 0)
   {
     for (int i = 0; i < noteRangeStretch; ++i)
     {
-      if (!orderedChord.empty())
+      if (!stretchedChord.empty())
       {
         // Always use the i-th lowest note for each stretch step
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t baseNote = orderedChord[i % orderedChord.size()];
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        uint8_t baseNote = stretchedChord[i % stretchedChord.size()];
         uint8_t newNote = constrain(baseNote + 12, 0, 127);
-        orderedChord.push_back(newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
-        orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        stretchedChord.push_back(newNote);
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        stretchedChord.erase(std::unique(stretchedChord.begin(), stretchedChord.end()), stretchedChord.end());
       }
     }
   }
@@ -657,21 +659,21 @@ void loop()
   {
     for (int i = 0; i < -noteRangeStretch; ++i)
     {
-      if (!orderedChord.empty())
+      if (!stretchedChord.empty())
       {
         // Always use the i-th highest note for each stretch step
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t baseNote = orderedChord[orderedChord.size() - 1 - (i % orderedChord.size())];
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        uint8_t baseNote = stretchedChord[stretchedChord.size() - 1 - (i % stretchedChord.size())];
         int newNote = constrain(static_cast<int>(baseNote) - 12, 0, 127);
-        orderedChord.insert(orderedChord.begin(), newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
-        orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        stretchedChord.insert(stretchedChord.begin(), newNote);
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        stretchedChord.erase(std::unique(stretchedChord.begin(), stretchedChord.end()), stretchedChord.end());
       }
     }
   }
 
   // --- Build the playingChord with octave shifts and no duplicates using selected pattern
-  // playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
+  // Use stretchedChord instead of shiftedChord below
   std::vector<uint8_t> patternIndices;
   // Always use the selected pattern, regardless of encoder mode
   if (selectedPatternIndex >= 0 && selectedPatternIndex < PAT_COUNT)
@@ -682,12 +684,12 @@ void loop()
     }
     else
     {
-      patternIndices = customPatternFuncs[selectedPatternIndex](orderedChord.size());
+      patternIndices = customPatternFuncs[selectedPatternIndex](stretchedChord.size());
     }
   }
   else
   {
-    patternIndices = patternUp(orderedChord.size());
+    patternIndices = patternUp(stretchedChord.size());
   }
 
   // Apply LOOP mode to patternIndices
@@ -697,16 +699,17 @@ void loop()
     for (int i = patternIndices.size() - 2; i > 0; --i)
       patternIndicesFinal.push_back(patternIndices[i]);
   }
+
   // Apply REVERSE mode
   if (patternReverse && !patternIndicesFinal.empty())
   {
     std::reverse(patternIndicesFinal.begin(), patternIndicesFinal.end());
   }
 
+  // Apply SMOOTH mode: deduplicate last note of one octave and first note of next octave if equal
   std::vector<uint8_t> playingChord;
   if (patternSmooth && octaveRange != 0 && !patternIndicesFinal.empty())
   {
-    // SMOOTH: deduplicate last note of one octave and first note of next octave if equal
     int octStart, octEnd, octStep;
     if (octaveRange > 0)
     {
@@ -735,7 +738,7 @@ void loop()
         uint8_t idx = patternIndicesFinal[i];
         int note = (selectedPatternIndex == PAT_ASPLAYED)
                        ? (idx < playedChord.size() ? playedChord[idx] + 12 * oct : -1)
-                       : (idx < orderedChord.size() ? orderedChord[idx] + 12 * oct : -1);
+                       : (idx < stretchedChord.size() ? stretchedChord[idx] + 12 * oct : -1);
         if (note < 0 || note > 127)
           continue;
         if (!first && note == prevNote)
@@ -766,9 +769,9 @@ void loop()
         }
         else
         {
-          if (idx < orderedChord.size())
+          if (idx < stretchedChord.size())
           {
-            int shifted = orderedChord[idx] + 12 * oct;
+            int shifted = stretchedChord[idx] + 12 * oct;
             if (shifted >= 0 && shifted <= 127)
               playingChord.push_back(shifted);
           }

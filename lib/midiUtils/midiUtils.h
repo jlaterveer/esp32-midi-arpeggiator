@@ -20,7 +20,6 @@ extern MidiState midiState;
 extern uint8_t midiStatus;
 extern uint8_t midiData1;
 
-
 // MIDI byte parser
 void readMidiByte(uint8_t byte);
 
