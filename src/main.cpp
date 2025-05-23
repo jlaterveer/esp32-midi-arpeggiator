@@ -4,21 +4,15 @@
 #include <USB.h>
 #include <USBMIDI.h>
 #include "PatternGenerators.h"
+#include "Constants.h"
+#include "MidiUtils.h"
 
 // EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
 
 // --- CONFIGURATION ---
 // Pin assignments for MIDI, LED, encoder, and buttons
-const uint8_t midiOutTxPin = 5;
-const uint8_t midiInRxPin = 4;
-const uint8_t ledBuiltIn = 21;
-const uint8_t clearButtonPin = 10;
-const uint8_t encoderCLK = 9;
-const uint8_t encoderDT = 8;
-const uint8_t encoderSW = 7;
-const uint8_t encoder0PinA = encoderCLK;
-const uint8_t encoder0PinB = encoderDT;
+// (moved to Constants.h)
 
 // --- ENCODER STATE MACHINE ---
 // Rotary encoder state table for quadrature decoding
@@ -52,32 +46,9 @@ const char *rhythmPatternNames[rhythmPatternCount] = {
     "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
     "Backward Jump", "Inside Bounce", "Staggered Rise"};
 
-// --- ENCODER MODES ---
-// List of all editable parameters for the encoder
-enum EncoderMode
-{
-  MODE_BPM,
-  MODE_LENGTH,
-  MODE_VELOCITY,
-  MODE_OCTAVE,
-  MODE_PATTERN,
-  MODE_PATTERN_PLAYBACK,
-  MODE_REVERSE,
-  MODE_SMOOTH, // Pattern smooth mode
-  MODE_RESOLUTION,
-  MODE_REPEAT,
-  MODE_TRANSPOSE,
-  MODE_DYNAMICS,
-  MODE_HUMANIZE,
-  MODE_LENGTH_RANDOMIZE,
-  MODE_BALANCE,
-  MODE_RANDOM_CHORD, // New mode: random steps replaced by 3-note chords
-  MODE_RHYTHM,       // Rhythm accent pattern selection
-  MODE_RANGE,        // Range shift for lowest/highest note
-  MODE_STRETCH       // Stretch pattern up/down by adding notes
-};
 EncoderMode encoderMode = MODE_BPM;
-const int encoderModeSize = 19; // Updated to match new mode count
+
+const int encoderModeSize = MODE_COUNT; // Use enum count for size
 
 // --- STRAIGHT/LOOP mode for pattern playback ---
 enum PatternPlaybackMode
@@ -94,32 +65,27 @@ bool patternReverse = false;
 bool patternSmooth = true;
 
 // --- PARAMETERS ---
-// All arpeggiator parameters
-int bpm = 96;                     // Beats per minute
-int noteLengthPercent = 40;       // Note length as percent of interval
-int noteVelocity = 127;           // MIDI velocity
-int octaveRange = 0;              // Octave spread
-int transpose = 0;                // Transpose in octaves
-int velocityDynamicsPercent = 56; // Velocity randomization percent
-bool timingHumanize = false;      // Enable timing humanization
-int timingHumanizePercent = 4;    // Humanization percent
-const int maxTimingHumanizePercent = 100;
+// (moved to Constants.h)
+
+// --- DEFAULTS ---
+int bpm = 96;                        // Beats per minute
+int noteLengthPercent = 40;          // Note length as percent of interval
+int noteVelocity = 127;              // MIDI velocity
+int octaveRange = 0;                 // Octave spread
+int transpose = 0;                   // Transpose in octaves
+int velocityDynamicsPercent = 56;    // Velocity randomization percent
+bool timingHumanize = false;         // Enable timing humanization
+int timingHumanizePercent = 4;       // Humanization percent
 int noteLengthRandomizePercent = 20; // Note length randomization percent
-const int maxNoteLengthRandomizePercent = 100;
-int noteBalancePercent = 0; // Note bias percent
-int randomChordPercent = 0; // Percentage of steps to replace with random 3-note chords
-int noteRangeShift = 0;     // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
-int noteRangeStretch = 0;   // Range stretch for lowest/highest note, -8..8
+int noteBalancePercent = 0;          // Note bias percent
+int randomChordPercent = 0;          // Percentage of steps to replace with random 3-note chords
+int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
+int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
+int notesPerBeatIndex = 4;           // 4 notes per beat
+int noteRepeat = 1;                  // Number of repeats per note
 
-const int minOctave = -3, maxOctave = 3;
-const int minTranspose = -3, maxTranspose = 3;
-
-// Note resolution options (notes per beat)
-const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
-const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
-int notesPerBeatIndex = 4; // Default: 4 notes per beat
 int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-int noteRepeat = 1; // Number of repeats per note
+
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
 
@@ -226,7 +192,9 @@ int selectedPatternIndex = 0;
 // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
 // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
 // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
-// playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
+// shiftedChord: The chord after applying range shift (used for further processing).
+// stretchedChord: The chord after applying range stretch (used for final pattern generation).
+// playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift/stretch.
 // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
 std::vector<uint8_t> currentChord; // Latched chord
 std::vector<uint8_t> tempChord;    // Chord being captured
@@ -245,34 +213,15 @@ const unsigned long ledFlashDuration = 100; // ms
 // --- MIDI I/O ---
 USBMIDI usbMIDI; // USB MIDI object
 
-// Send a single MIDI byte to hardware MIDI out
-void midiSendByte(uint8_t byte)
-{
-  Serial2.write(byte);
-}
-
-// Send MIDI note on to both hardware and USB MIDI
-void sendNoteOn(uint8_t note, uint8_t velocity)
-{
-  midiSendByte(0x90);
-  midiSendByte(note);
-  midiSendByte(velocity);
-  usbMIDI.noteOn(note, velocity, 1); // Channel 1
-}
-
-// Send MIDI note off to both hardware and USB MIDI
-void sendNoteOff(uint8_t note)
-{
-  midiSendByte(0x80);
-  midiSendByte(note);
-  midiSendByte(0);
-  usbMIDI.noteOff(note, 0, 1); // Channel 1
-}
-
 // --- MIDI CC PARAMETER CONTROL ---
 // Map MIDI CC numbers to parameter pointers or setters
 void handleMidiCC(uint8_t cc, uint8_t value)
 {
+  Serial.print("Received CC: ");
+  Serial.print(cc);
+  Serial.print(", Value: ");
+  Serial.println(value);
+
   switch (cc)
   {
   case 1: // Mod Wheel -> BPM (scaled 40-240)
@@ -338,112 +287,6 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   arpInterval = 60000 / (bpm * notesPerBeat);
 }
 
-// --- MIDI IN PARSING ---
-// MIDI parser state machine
-enum MidiState
-{
-  WaitingStatus,
-  WaitingData1,
-  WaitingData2
-};
-MidiState midiState = WaitingStatus;
-uint8_t midiStatus, midiData1;
-
-// Handle incoming MIDI note on
-void handleNoteOn(uint8_t note)
-{
-  // Start capturing a new chord if not already capturing
-  if (!capturingChord)
-  {
-    capturingChord = true;
-    tempChord.clear();
-    leadNote = note;
-  }
-  // Add note to tempChord if not already present
-  if (std::find(tempChord.begin(), tempChord.end(), note) == tempChord.end())
-  {
-    tempChord.push_back(note);
-  }
-}
-
-// Handle incoming MIDI note off
-void handleNoteOff(uint8_t note)
-{
-  // Latch chord when lead note is released
-  if (capturingChord && note == leadNote)
-  {
-    currentChord = tempChord;
-    capturingChord = false;
-    currentNoteIndex = 0;
-    noteRepeatCounter = 0;
-  }
-}
-
-// --- MIDI CLOCK SYNC ---
-volatile unsigned long clockTime = 0;
-volatile int clockCount = 0;
-float clockBpm = 120.0;
-volatile bool countTicks = false;
-
-void handleMidiClock()
-{
-  if (not countTicks) {
-    clockTime = millis();
-    countTicks = true;
-    neopixelWrite(ledBuiltIn, 0, 64, 0); // Red blink
-  }  
-  if (clockCount == 6) { // LED off after 6 ticks
-      neopixelWrite(ledBuiltIn, 0, 0, 0);
-  }
-  if (clockCount >= 24) {// 24 MIDI clocks per quarter note
-    countTicks = false;
-    unsigned long interval = millis() - clockTime;
-    if (interval > 0)
-    {
-      clockBpm = 60000.0f / (float)interval;
-      bpm = constrain((int)clockBpm, 40, 240);
-      arpInterval = 60000 / (bpm * notesPerBeat);
-    }
-    clockCount = 0;  
-  }
-  clockCount++;
-}
-
-// Parse incoming MIDI bytes (hardware MIDI in)
-void readMidiByte(uint8_t byte)
-{
-  if (byte == 0xF8) { // MIDI Clock
-    handleMidiClock();
-    return;
-  }
-  if (byte & 0x80)
-  {
-    midiStatus = byte;
-    midiState = WaitingData1;
-  }
-  else
-  {
-    switch (midiState)
-    {
-    case WaitingData1:
-      midiData1 = byte;
-      midiState = WaitingData2;
-      break;
-    case WaitingData2:
-      if ((midiStatus & 0xF0) == 0x90 && byte > 0)
-        handleNoteOn(midiData1);
-      else if ((midiStatus & 0xF0) == 0x80 || ((midiStatus & 0xF0) == 0x90 && byte == 0))
-        handleNoteOff(midiData1);
-      else if ((midiStatus & 0xF0) == 0xB0) // CC
-        handleMidiCC(midiData1, byte);
-      midiState = WaitingData1;
-      break;
-    }
-  }
-}
-
-
-
 // --- TIMING HUMANIZATION FUNCTION ---
 // Returns a random offset for note timing (ms)
 int getTimingHumanizeOffset(unsigned long noteLengthMs)
@@ -490,6 +333,17 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   for (size_t i = 0; i < numToReplace && i < indices.size(); ++i)
   {
     chord[indices[i]] = targetNote;
+  }
+}
+
+template <typename T>
+void printIfChanged(const char *label, T &lastValue, T currentValue)
+{
+  if (currentValue != lastValue)
+  {
+    Serial.print(label);
+    Serial.println(currentValue);
+    lastValue = currentValue;
   }
 }
 
@@ -572,39 +426,19 @@ void loop()
     swHandled = false;
   }
 
-  // --- Add encoder switch for STRAIGHT/LOOP toggle ---
-  // Encoder switch long press: toggle pattern playback mode
-  static unsigned long encoderSWPressTime = 0;
-  static bool encoderSWPrev = false;
-  bool encoderSWNow = !digitalRead(encoderSW);
-  if (encoderSWNow && !encoderSWPrev)
-  {
-    encoderSWPressTime = millis();
-  }
-  if (!encoderSWNow && encoderSWPrev)
-  {
-    if (millis() - encoderSWPressTime > 500) // long press
-    {
-      patternPlaybackMode = (patternPlaybackMode == STRAIGHT) ? LOOP : STRAIGHT;
-      Serial.print("Pattern Playback Mode: ");
-      Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
-    }
-  }
-  encoderSWPrev = encoderSWNow;
-
   // --- Rotary encoder processing ---
   unsigned char result = rotary_process();
   static int stepCounter = 0;
   int delta = 0;
   // Count encoder steps
-  if (result == 0x10)
-    stepCounter++;
-  else if (result == 0x20)
-    stepCounter--;
-  if (abs(stepCounter) >= 2)
+  if (result == 0x10 || result == 0x20)
   {
-    delta = (stepCounter > 0) ? 1 : -1;
-    stepCounter = 0;
+    stepCounter += (result == 0x10) ? 1 : -1;
+    if (abs(stepCounter) >= 2)
+    {
+      delta = (stepCounter > 0) ? 1 : -1;
+      stepCounter = 0;
+    }
   }
 
   // --- Parameter adjustment via encoder ---
@@ -710,18 +544,14 @@ void loop()
       break;
     case MODE_RHYTHM:
       selectedRhythmPattern = constrain(selectedRhythmPattern + delta, 0, rhythmPatternCount - 1);
-      Serial.print("Rhythm Pattern: ");
-      Serial.println(rhythmPatternNames[selectedRhythmPattern]);
+      // Serial.print("Rhythm Pattern: ");
+      // Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
     case MODE_RANGE:
       noteRangeShift = constrain(noteRangeShift + delta, -24, 24);
-      //Serial.print("Range Shift: ");
-      //Serial.println(noteRangeShift);
       break;
     case MODE_STRETCH:
       noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
-      //Serial.print("Range Stretch: ");
-      //Serial.println(noteRangeStretch);
       break;
     }
     arpInterval = 60000 / (bpm * notesPerBeat);
@@ -730,100 +560,111 @@ void loop()
   // --- MIDI IN (hardware) ---
   while (Serial1.available())
     readMidiByte(Serial1.read());
+  
+    // --- MIDI IN (USB) ---
+    processUsbMidiPackets(usbMIDI);
 
-  // --- MIDI IN (USB) ---
-  midiEventPacket_t packet;
-  while (usbMIDI.readPacket(&packet))
-  {
-    uint8_t cin = packet.header & 0x0F;
-    if (packet.byte1 == 0xF8) { // MIDI Clock
-      handleMidiClock();
-      continue;
-    }
-    switch (cin)
+    /*
+    midiEventPacket_t packet;
+    while (usbMIDI.readPacket(&packet))
     {
-    case 0x09: // Note On
-      if (packet.byte3 > 0)
-        handleNoteOn(packet.byte2);
-      else
-        handleNoteOff(packet.byte2);
-      break;
-    case 0x08: // Note Off
-      handleNoteOff(packet.byte2);
-      break;
-    case 0x0B: // Control Change (CC)
-      handleMidiCC(packet.byte2, packet.byte3);
-      break;
-    }
-  }
-
-  // --- Chord processing ---
-  // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
-  std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
-
-  // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
-  std::vector<uint8_t> playedChord = baseChord;
-
-  // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
-  std::vector<uint8_t> orderedChord = playedChord;
-  std::sort(orderedChord.begin(), orderedChord.end());
-  // Remove duplicates from orderedChord
-  orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
-
-  // --- Apply range shift to orderedChord before building pattern indices ---
-  // When noteRangeShift > 0, shift up by removing the lowest note and adding oldLowest+12 (clamped), for each step.
-  // When noteRangeShift < 0, shift down by removing the highest note and adding oldHighest-12 (clamped), for each step.
-  if (noteRangeShift > 0)
-  {
-    for (int i = 0; i < noteRangeShift; ++i)
-    {
-      if (!orderedChord.empty())
+      uint8_t cin = packet.header & 0x0F;
+      if (packet.byte1 == 0xF8)
       {
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t oldLowest = orderedChord.front();
-        orderedChord.erase(orderedChord.begin());
-        uint8_t newNote = constrain(oldLowest + 12, 0, 127);
-        orderedChord.push_back(newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
-        // Remove duplicates again in case newNote already exists
-        // orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        handleMidiClock();
+        continue;
+      }
+      switch (cin)
+      {
+      case 0x09: // Note On
+        if (packet.byte3 > 0)
+          handleNoteOn(packet.byte2);
+        else
+          handleNoteOff(packet.byte2);
+        break;
+      case 0x08: // Note Off
+        handleNoteOff(packet.byte2);
+        break;
+      case 0x0B: // Control Change (CC)
+        handleMidiCC(packet.byte2, packet.byte3);
+        break;
+      default:
+        // No action for other CIN values
+        break;
       }
     }
+    */
+
+    // --- Chord processing ---
+    // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
+    std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
+
+    // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
+    std::vector<uint8_t> playedChord = baseChord;
+
+    // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
+    std::vector<uint8_t> orderedChord = playedChord;
+    std::sort(orderedChord.begin(), orderedChord.end());
+
+    // Remove duplicates from orderedChord
+    orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+
+    // --- Apply range shift to orderedChord before building pattern indices ---
+    // When noteRangeShift > 0, shift up by removing the lowest note and adding oldLowest+12 (clamped), for each step.
+    // When noteRangeShift < 0, shift down by removing the highest note and adding oldHighest-12 (clamped), for each step.
+    std::vector<uint8_t> shiftedChord = orderedChord;
+    if (noteRangeShift > 0)
+    {
+      for (int i = 0; i < noteRangeShift; ++i)
+      {
+        if (!shiftedChord.empty())
+        {
+          std::sort(shiftedChord.begin(), shiftedChord.end());
+          uint8_t oldLowest = shiftedChord.front();
+          shiftedChord.erase(shiftedChord.begin());
+          uint8_t newNote = constrain(oldLowest + 12, 0, 127);
+          shiftedChord.push_back(newNote);
+          std::sort(shiftedChord.begin(), shiftedChord.end());
+          // Remove duplicates again in case newNote already exists
+          // shiftedChord.erase(std::unique(shiftedChord.begin(), shiftedChord.end()), shiftedChord.end());
+        }
+      }
   }
   else if (noteRangeShift < 0)
   {
     for (int i = 0; i < -noteRangeShift; ++i)
     {
-      if (!orderedChord.empty())
+      if (!shiftedChord.empty())
       {
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t oldHighest = orderedChord.back();
-        orderedChord.pop_back();
+        std::sort(shiftedChord.begin(), shiftedChord.end());
+        uint8_t oldHighest = shiftedChord.back();
+        shiftedChord.pop_back();
         int newNote = constrain(static_cast<int>(oldHighest) - 12, 0, 127);
-        orderedChord.insert(orderedChord.begin(), newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
+        shiftedChord.insert(shiftedChord.begin(), newNote);
+        std::sort(shiftedChord.begin(), shiftedChord.end());
         // Remove duplicates again in case newNote already exists
-        // orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        // shiftedChord.erase(std::unique(shiftedChord.begin(), shiftedChord.end()), shiftedChord.end());
       }
     }
   }
 
-  // --- Apply range stretch to orderedChord before building pattern indices ---
+  // --- Apply range stretch to shiftedChord before building pattern indices ---
   // When noteRangeStretch > 0, add extra notes up by one octave above the lowest notes.
   // When noteRangeStretch < 0, add extra notes down by one octave below the highest notes.
+  std::vector<uint8_t> stretchedChord = shiftedChord;
   if (noteRangeStretch > 0)
   {
     for (int i = 0; i < noteRangeStretch; ++i)
     {
-      if (!orderedChord.empty())
+      if (!stretchedChord.empty())
       {
         // Always use the i-th lowest note for each stretch step
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t baseNote = orderedChord[i % orderedChord.size()];
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        uint8_t baseNote = stretchedChord[i % stretchedChord.size()];
         uint8_t newNote = constrain(baseNote + 12, 0, 127);
-        orderedChord.push_back(newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
-        orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        stretchedChord.push_back(newNote);
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        stretchedChord.erase(std::unique(stretchedChord.begin(), stretchedChord.end()), stretchedChord.end());
       }
     }
   }
@@ -831,21 +672,21 @@ void loop()
   {
     for (int i = 0; i < -noteRangeStretch; ++i)
     {
-      if (!orderedChord.empty())
+      if (!stretchedChord.empty())
       {
         // Always use the i-th highest note for each stretch step
-        std::sort(orderedChord.begin(), orderedChord.end());
-        uint8_t baseNote = orderedChord[orderedChord.size() - 1 - (i % orderedChord.size())];
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        uint8_t baseNote = stretchedChord[stretchedChord.size() - 1 - (i % stretchedChord.size())];
         int newNote = constrain(static_cast<int>(baseNote) - 12, 0, 127);
-        orderedChord.insert(orderedChord.begin(), newNote);
-        std::sort(orderedChord.begin(), orderedChord.end());
-        orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+        stretchedChord.insert(stretchedChord.begin(), newNote);
+        std::sort(stretchedChord.begin(), stretchedChord.end());
+        stretchedChord.erase(std::unique(stretchedChord.begin(), stretchedChord.end()), stretchedChord.end());
       }
     }
   }
 
   // --- Build the playingChord with octave shifts and no duplicates using selected pattern
-  // playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
+  // Use stretchedChord instead of shiftedChord below
   std::vector<uint8_t> patternIndices;
   // Always use the selected pattern, regardless of encoder mode
   if (selectedPatternIndex >= 0 && selectedPatternIndex < PAT_COUNT)
@@ -856,12 +697,12 @@ void loop()
     }
     else
     {
-      patternIndices = customPatternFuncs[selectedPatternIndex](orderedChord.size());
+      patternIndices = customPatternFuncs[selectedPatternIndex](stretchedChord.size());
     }
   }
   else
   {
-    patternIndices = patternUp(orderedChord.size());
+    patternIndices = patternUp(stretchedChord.size());
   }
 
   // Apply LOOP mode to patternIndices
@@ -871,16 +712,17 @@ void loop()
     for (int i = patternIndices.size() - 2; i > 0; --i)
       patternIndicesFinal.push_back(patternIndices[i]);
   }
+
   // Apply REVERSE mode
   if (patternReverse && !patternIndicesFinal.empty())
   {
     std::reverse(patternIndicesFinal.begin(), patternIndicesFinal.end());
   }
 
+  // Apply SMOOTH mode: deduplicate last note of one octave and first note of next octave if equal
   std::vector<uint8_t> playingChord;
   if (patternSmooth && octaveRange != 0 && !patternIndicesFinal.empty())
   {
-    // SMOOTH: deduplicate last note of one octave and first note of next octave if equal
     int octStart, octEnd, octStep;
     if (octaveRange > 0)
     {
@@ -909,7 +751,7 @@ void loop()
         uint8_t idx = patternIndicesFinal[i];
         int note = (selectedPatternIndex == PAT_ASPLAYED)
                        ? (idx < playedChord.size() ? playedChord[idx] + 12 * oct : -1)
-                       : (idx < orderedChord.size() ? orderedChord[idx] + 12 * oct : -1);
+                       : (idx < stretchedChord.size() ? stretchedChord[idx] + 12 * oct : -1);
         if (note < 0 || note > 127)
           continue;
         if (!first && note == prevNote)
@@ -940,9 +782,9 @@ void loop()
         }
         else
         {
-          if (idx < orderedChord.size())
+          if (idx < stretchedChord.size())
           {
-            int shifted = orderedChord[idx] + 12 * oct;
+            int shifted = stretchedChord[idx] + 12 * oct;
             if (shifted >= 0 && shifted <= 127)
               playingChord.push_back(shifted);
           }
@@ -1043,7 +885,6 @@ void loop()
     ledFlashing = false;
   }
 
-
   // --- Serial debug output for parameter changes ---
   static int lastBPM = bpm, lastLength = noteLengthPercent, lastVelocity = noteVelocity, lastOctave = octaveRange;
   static int lastResolutionIndex = notesPerBeatIndex, lastNoteRepeat = noteRepeat, lastTranspose = transpose;
@@ -1058,160 +899,49 @@ void loop()
   static int lastNoteRangeShift = noteRangeShift;
   static int lastNoteRangeStretch = noteRangeStretch;
 
-  if (encoderMode == MODE_BPM && bpm != lastBPM)
-  {
-    Serial.print("BPM: ");
-    Serial.println(bpm);
-    lastBPM = bpm;
-  }
-  if (encoderMode == MODE_LENGTH && noteLengthPercent != lastLength)
-  {
-    Serial.print("Note Length %: ");
-    Serial.println(noteLengthPercent);
-    lastLength = noteLengthPercent;
-  }
-  if (encoderMode == MODE_VELOCITY && noteVelocity != lastVelocity)
-  {
-    Serial.print("Velocity: ");
-    Serial.println(noteVelocity);
-    lastVelocity = noteVelocity;
-  }
-  if (encoderMode == MODE_OCTAVE && octaveRange != lastOctave)
-  {
-    Serial.print("Octave Range: ");
-    Serial.println(octaveRange);
-    lastOctave = octaveRange;
-  }
-  if (encoderMode == MODE_RESOLUTION && notesPerBeatIndex != lastResolutionIndex)
-  {
-    Serial.print("Notes Per Beat: ");
-    Serial.println(notesPerBeat);
-    lastResolutionIndex = notesPerBeatIndex;
-  }
-  if (encoderMode == MODE_REPEAT && noteRepeat != lastNoteRepeat)
-  {
-    Serial.print("Note Repeat: ");
-    Serial.println(noteRepeat);
-    lastNoteRepeat = noteRepeat;
-  }
-  if (encoderMode == MODE_TRANSPOSE && transpose != lastTranspose)
-  {
-    Serial.print("Transpose: ");
-    Serial.println(transpose);
-    lastTranspose = transpose;
-  }
-  if (encoderMode == MODE_DYNAMICS && velocityDynamicsPercent != lastUseVelocityDynamics)
-  {
-    Serial.print("Velocity Dynamics Percent: ");
-    Serial.println(velocityDynamicsPercent);
-    lastUseVelocityDynamics = velocityDynamicsPercent;
-  }
-  if (encoderMode == MODE_HUMANIZE && timingHumanizePercent != lastTimingHumanizePercent)
-  {
-    Serial.print("Timing Humanize Percent: ");
-    Serial.println(timingHumanizePercent);
-    lastTimingHumanizePercent = timingHumanizePercent;
-  }
-  if (encoderMode == MODE_LENGTH_RANDOMIZE && noteLengthRandomizePercent != lastNoteLengthRandomizePercent)
-  {
-    Serial.print("Note Length Randomize Percent: ");
-    Serial.println(noteLengthRandomizePercent);
-    lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
-  }
-  if (encoderMode == MODE_BALANCE && noteBalancePercent != lastNoteBalancePercent)
-  {
-    Serial.print("Note Balance Percent: ");
-    Serial.println(noteBalancePercent);
-    lastNoteBalancePercent = noteBalancePercent;
-  }
-  if (encoderMode == MODE_RANDOM_CHORD && randomChordPercent != lastRandomChordPercent)
-  {
-    Serial.print("Random Chord Percent: ");
-    Serial.println(randomChordPercent);
-    lastRandomChordPercent = randomChordPercent;
-  }
-  if (encoderMode == MODE_RHYTHM && selectedRhythmPattern != lastRhythmPattern)
-  {
-    Serial.print("Rhythm Pattern: ");
-    Serial.println(rhythmPatternNames[selectedRhythmPattern]);
-    lastRhythmPattern = selectedRhythmPattern;
-  }
-  if (encoderMode == MODE_RANGE && noteRangeShift != lastNoteRangeShift)
-  {
-    Serial.print("Range Shift: ");
-    Serial.println(noteRangeShift);
-    lastNoteRangeShift = noteRangeShift;
-  }
-  if (encoderMode == MODE_STRETCH && noteRangeStretch != lastNoteRangeStretch)
-  {
-    Serial.print("Range Stretch: ");
-    Serial.println(noteRangeStretch);
-    lastNoteRangeStretch = noteRangeStretch;
-  }
+  printIfChanged("BPM: ", lastBPM, bpm);
+  printIfChanged("Note Length %: ", lastLength, noteLengthPercent);
+  printIfChanged("Velocity: ", lastVelocity, noteVelocity);
+  printIfChanged("Octave Range: ", lastOctave, octaveRange);
+  printIfChanged("Notes Per Beat: ", lastResolutionIndex, notesPerBeatIndex);
+  printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat);
+  printIfChanged("Transpose: ", lastTranspose, transpose);
+  printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent);
+  printIfChanged("Timing Humanize Percent: ", lastTimingHumanizePercent, timingHumanizePercent);
+  printIfChanged("Note Length Randomize Percent: ", lastNoteLengthRandomizePercent, noteLengthRandomizePercent);
+  printIfChanged("Note Balance Percent: ", lastNoteBalancePercent, noteBalancePercent);
+  printIfChanged("Random Chord Percent: ", lastRandomChordPercent, randomChordPercent);
+  printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern);
+  printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift);
+  printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch);
 
   if (encoderMode != lastMode)
   {
+    static const char *modeNames[] = {
+        "BPM",
+        "Note Length %",
+        "Velocity",
+        "Octave Range",
+        "Pattern",
+        "Pattern Playback Mode",
+        "Pattern Reverse",
+        "Pattern Smooth",
+        "Notes Per Beat",
+        "Note Repeat",
+        "Transpose",
+        "Velocity Dynamics Percent",
+        "Timing Humanize Percent",
+        "Note Length Randomize Percent",
+        "Note Balance Percent",
+        "Random Chord Percent",
+        "Rhythm Pattern",
+        "Range Shift",
+        "Range Stretch"};
     Serial.print("Encoder Mode: ");
-    switch (encoderMode)
-    {
-    case MODE_BPM:
-      Serial.println("BPM");
-      break;
-    case MODE_LENGTH:
-      Serial.println("Note Length %");
-      break;
-    case MODE_VELOCITY:
-      Serial.println("Velocity");
-      break;
-    case MODE_OCTAVE:
-      Serial.println("Octave Range");
-      break;
-    case MODE_PATTERN:
-      Serial.println("Pattern");
-      break;
-    case MODE_PATTERN_PLAYBACK:
-      Serial.println("Pattern Playback Mode");
-      break;
-    case MODE_REVERSE:
-      Serial.println("Pattern Reverse");
-      break;
-    case MODE_SMOOTH:
-      Serial.println("Pattern Smooth");
-      break;
-    case MODE_RESOLUTION:
-      Serial.println("Notes Per Beat");
-      break;
-    case MODE_REPEAT:
-      Serial.println("Note Repeat");
-      break;
-    case MODE_TRANSPOSE:
-      Serial.println("Transpose");
-      break;
-    case MODE_DYNAMICS:
-      Serial.println("Velocity Dynamics Percent");
-      break;
-    case MODE_HUMANIZE:
-      Serial.println("Timing Humanize Percent");
-      break;
-    case MODE_LENGTH_RANDOMIZE:
-      Serial.println("Note Length Randomize Percent");
-      break;
-    case MODE_BALANCE:
-      Serial.println("Note Balance Percent");
-      break;
-    case MODE_RANDOM_CHORD:
-      Serial.println("Random Chord Percent");
-      break;
-    case MODE_RHYTHM:
-      Serial.println("Rhythm Pattern");
-      break;
-    case MODE_RANGE:
-      Serial.println("Range Shift");
-      break;
-    case MODE_STRETCH:
-      Serial.println("Range Stretch");
-      break;
-    }
+    if (encoderMode >= 0 && encoderMode < (int)(sizeof(modeNames) / sizeof(modeNames[0])))
+      Serial.println(modeNames[encoderMode]);
+    else
+      Serial.println("Unknown");
     lastMode = encoderMode;
   }
 }
