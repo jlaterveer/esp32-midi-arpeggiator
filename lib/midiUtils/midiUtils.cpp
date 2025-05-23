@@ -107,6 +107,40 @@ void handleMidiClock()
   }
 }
 
+
+// Function to handle incoming USB MIDI packets
+void processUsbMidiPackets(USBMIDI &usbMIDI)
+{
+  midiEventPacket_t packet;
+  while (usbMIDI.readPacket(&packet))
+  {
+    uint8_t cin = packet.header & 0x0F;
+    if (packet.byte1 == 0xF8)
+    {
+      handleMidiClock();
+      continue;
+    }
+    switch (cin)
+    {
+    case 0x09: // Note On
+      if (packet.byte3 > 0)
+        handleNoteOn(packet.byte2);
+      else
+        handleNoteOff(packet.byte2);
+      break;
+    case 0x08: // Note Off
+      handleNoteOff(packet.byte2);
+      break;
+    case 0x0B: // Control Change (CC)
+      handleMidiCC(packet.byte2, packet.byte3);
+      break;
+    default:
+      // No action for other CIN values
+      break;
+    }
+  }
+}
+
 // Provide access to usbMIDI object from main.cpp
 extern USBMIDI usbMIDI;
 extern HardwareSerial Serial2;

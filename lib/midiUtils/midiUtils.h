@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <USBMIDI.h>
 
 // MIDI clock sync state
 extern volatile unsigned long clockTime;
@@ -27,6 +28,7 @@ void readMidiByte(uint8_t byte);
 void handleNoteOn(uint8_t note);
 void handleNoteOff(uint8_t note);
 void handleMidiCC(uint8_t cc, uint8_t value);
+void processUsbMidiPackets(USBMIDI &usbMIDI);
 
 // MIDI clock sync handler
 void handleMidiClock();

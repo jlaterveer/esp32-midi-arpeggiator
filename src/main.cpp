@@ -65,7 +65,6 @@ bool patternReverse = false;
 bool patternSmooth = true;
 
 // --- PARAMETERS ---
-// All arpeggiator parameters
 // (moved to Constants.h)
 
 // --- DEFAULTS ---
@@ -218,6 +217,11 @@ USBMIDI usbMIDI; // USB MIDI object
 // Map MIDI CC numbers to parameter pointers or setters
 void handleMidiCC(uint8_t cc, uint8_t value)
 {
+  Serial.print("Received CC: ");
+  Serial.print(cc);
+  Serial.print(", Value: ");
+  Serial.println(value);
+
   switch (cc)
   {
   case 1: // Mod Wheel -> BPM (scaled 40-240)
@@ -556,71 +560,75 @@ void loop()
   // --- MIDI IN (hardware) ---
   while (Serial1.available())
     readMidiByte(Serial1.read());
+  
+    // --- MIDI IN (USB) ---
+    processUsbMidiPackets(usbMIDI);
 
-  // --- MIDI IN (USB) ---
-  midiEventPacket_t packet;
-  while (usbMIDI.readPacket(&packet))
-  {
-    uint8_t cin = packet.header & 0x0F;
-    if (packet.byte1 == 0xF8)
+    /*
+    midiEventPacket_t packet;
+    while (usbMIDI.readPacket(&packet))
     {
-      handleMidiClock();
-      continue;
-    }
-    switch (cin)
-    {
-    case 0x09: // Note On
-      if (packet.byte3 > 0)
-        handleNoteOn(packet.byte2);
-      else
-        handleNoteOff(packet.byte2);
-      break;
-    case 0x08: // Note Off
-      handleNoteOff(packet.byte2);
-      break;
-    case 0x0B: // Control Change (CC)
-      handleMidiCC(packet.byte2, packet.byte3);
-      break;
-    default:
-      // No action for other CIN values
-      break;
-    }
-  }
-
-  // --- Chord processing ---
-  // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
-  std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
-
-  // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
-  std::vector<uint8_t> playedChord = baseChord;
-
-  // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
-  std::vector<uint8_t> orderedChord = playedChord;
-  std::sort(orderedChord.begin(), orderedChord.end());
-
-  // Remove duplicates from orderedChord
-  orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
-
-  // --- Apply range shift to orderedChord before building pattern indices ---
-  // When noteRangeShift > 0, shift up by removing the lowest note and adding oldLowest+12 (clamped), for each step.
-  // When noteRangeShift < 0, shift down by removing the highest note and adding oldHighest-12 (clamped), for each step.
-  std::vector<uint8_t> shiftedChord = orderedChord;
-  if (noteRangeShift > 0)
-  {
-    for (int i = 0; i < noteRangeShift; ++i)
-    {
-      if (!shiftedChord.empty())
+      uint8_t cin = packet.header & 0x0F;
+      if (packet.byte1 == 0xF8)
       {
-        std::sort(shiftedChord.begin(), shiftedChord.end());
-        uint8_t oldLowest = shiftedChord.front();
-        shiftedChord.erase(shiftedChord.begin());
-        uint8_t newNote = constrain(oldLowest + 12, 0, 127);
-        shiftedChord.push_back(newNote);
-        std::sort(shiftedChord.begin(), shiftedChord.end());
-        // Remove duplicates again in case newNote already exists
-        // shiftedChord.erase(std::unique(shiftedChord.begin(), shiftedChord.end()), shiftedChord.end());
+        handleMidiClock();
+        continue;
+      }
+      switch (cin)
+      {
+      case 0x09: // Note On
+        if (packet.byte3 > 0)
+          handleNoteOn(packet.byte2);
+        else
+          handleNoteOff(packet.byte2);
+        break;
+      case 0x08: // Note Off
+        handleNoteOff(packet.byte2);
+        break;
+      case 0x0B: // Control Change (CC)
+        handleMidiCC(packet.byte2, packet.byte3);
+        break;
+      default:
+        // No action for other CIN values
+        break;
       }
     }
+    */
+
+    // --- Chord processing ---
+    // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
+    std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
+
+    // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
+    std::vector<uint8_t> playedChord = baseChord;
+
+    // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
+    std::vector<uint8_t> orderedChord = playedChord;
+    std::sort(orderedChord.begin(), orderedChord.end());
+
+    // Remove duplicates from orderedChord
+    orderedChord.erase(std::unique(orderedChord.begin(), orderedChord.end()), orderedChord.end());
+
+    // --- Apply range shift to orderedChord before building pattern indices ---
+    // When noteRangeShift > 0, shift up by removing the lowest note and adding oldLowest+12 (clamped), for each step.
+    // When noteRangeShift < 0, shift down by removing the highest note and adding oldHighest-12 (clamped), for each step.
+    std::vector<uint8_t> shiftedChord = orderedChord;
+    if (noteRangeShift > 0)
+    {
+      for (int i = 0; i < noteRangeShift; ++i)
+      {
+        if (!shiftedChord.empty())
+        {
+          std::sort(shiftedChord.begin(), shiftedChord.end());
+          uint8_t oldLowest = shiftedChord.front();
+          shiftedChord.erase(shiftedChord.begin());
+          uint8_t newNote = constrain(oldLowest + 12, 0, 127);
+          shiftedChord.push_back(newNote);
+          std::sort(shiftedChord.begin(), shiftedChord.end());
+          // Remove duplicates again in case newNote already exists
+          // shiftedChord.erase(std::unique(shiftedChord.begin(), shiftedChord.end()), shiftedChord.end());
+        }
+      }
   }
   else if (noteRangeShift < 0)
   {
