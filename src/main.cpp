@@ -193,7 +193,9 @@ int selectedPatternIndex = 0;
 // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
 // playedChord: The chord after removing duplicates, preserving order (used for PAT_ASPLAYED).
 // orderedChord: The chord after sorting and deduplication (used for most patterns, and for range shifting).
-// playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift.
+// shiftedChord: The chord after applying range shift (used for further processing).
+// stretchedChord: The chord after applying range stretch (used for final pattern generation).
+// playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift/stretch.
 // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
 std::vector<uint8_t> currentChord; // Latched chord
 std::vector<uint8_t> tempChord;    // Chord being captured
@@ -425,14 +427,14 @@ void loop()
   static int stepCounter = 0;
   int delta = 0;
   // Count encoder steps
-  if (result == 0x10)
-    stepCounter++;
-  else if (result == 0x20)
-    stepCounter--;
-  if (abs(stepCounter) >= 2)
+  if (result == 0x10 || result == 0x20)
   {
-    delta = (stepCounter > 0) ? 1 : -1;
-    stepCounter = 0;
+    stepCounter += (result == 0x10) ? 1 : -1;
+    if (abs(stepCounter) >= 2)
+    {
+      delta = (stepCounter > 0) ? 1 : -1;
+      stepCounter = 0;
+    }
   }
 
   // --- Parameter adjustment via encoder ---
@@ -561,7 +563,7 @@ void loop()
   {
     uint8_t cin = packet.header & 0x0F;
     if (packet.byte1 == 0xF8)
-    { // MIDI Clock
+    {
       handleMidiClock();
       continue;
     }
@@ -578,6 +580,9 @@ void loop()
       break;
     case 0x0B: // Control Change (CC)
       handleMidiCC(packet.byte2, packet.byte3);
+      break;
+    default:
+      // No action for other CIN values
       break;
     }
   }
