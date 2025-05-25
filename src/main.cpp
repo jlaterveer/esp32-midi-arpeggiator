@@ -6,6 +6,7 @@
 #include "PatternGenerators.h"
 #include "Constants.h"
 #include "midiUtils.h"
+#include "RhythmPatterns.h" // Add this include if RhythmPattern is defined in this header
 
 // EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
@@ -802,81 +803,75 @@ void loop()
   std::vector<StepNotes> stepNotes;
   buildRandomChordSteps(stepNotes, playingChord, playedChord, randomChordPercent);
 
-  // --- Arpeggiator timing and note scheduling ---
-  static int timingOffset = 0;
-  static unsigned long nextNoteTime = 0;
+  // --- Rhythm pattern processing ---
+  const RhythmPattern &currentPattern = rhythmPatterns[selectedRhythmPattern];
+  const std::vector<int> &noteLengths = currentPattern.noteLengths;
+  const std::vector<int> &accents = currentPattern.accents;
 
-  unsigned long noteLengthMs = arpInterval * noteLengthPercent / 100;
-  unsigned long randomizedNoteLengthMs = getRandomizedNoteLength(noteLengthMs);
+  // --- Arpeggiator timing and note scheduling ---
+  static unsigned long nextNoteTime = 0;
+  static size_t rhythmIndex = 0;
+  static std::vector<uint8_t> notesOn; // Track currently active notes
 
   if (nextNoteTime == 0)
     nextNoteTime = now;
 
-  uint8_t velocityToSend = noteVelocity;
+  // Get the current note length in milliseconds
+  int currentNoteLength16th = abs(noteLengths[rhythmIndex % noteLengths.size()]);
+  unsigned long currentNoteLengthMs = (arpInterval * currentNoteLength16th) / 4;
 
-  // --- Note scheduling: play next note/chord if ready ---
-  static std::vector<uint8_t> notesOn;
-  if (!noteOnActive && !stepNotes.empty() && now >= nextNoteTime)
+  // Determine if the current step is a rest
+  bool isRest = noteLengths[rhythmIndex % noteLengths.size()] < 0;
+
+  if (now >= nextNoteTime)
   {
-    size_t chordSize = stepNotes.size();
-    size_t noteIndex = currentNoteIndex % chordSize;
-    notesOn = stepNotes[noteIndex].notes;
-
-    // --- Rhythm velocity calculation using pattern generator ---
-    std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
-    // Invert mapping: 0 is loudest (1.0), max is softest (0.1)
-    float rhythmMult = 1.0f;
-    if (!rhythmPatternIndices.empty())
+    // Send note off for any currently active notes
+    for (uint8_t note : notesOn)
     {
-      uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
-      uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
-      uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
-      if (maxIdx > minIdx)
-      {
-        // Inverted: 0 -> 1.0, max -> 0.1
-        rhythmMult = 1.0f - 0.9f * (float)(idx - minIdx) / (float)(maxIdx - minIdx);
-        rhythmMult = std::max(0.1f, rhythmMult); // Clamp to at least 0.1
-      }
-      else
-      {
-        rhythmMult = 1.0f;
-      }
-    }
-    uint8_t rhythmVelocity = constrain((int)(noteVelocity * rhythmMult), 64, 127);
-
-    // Send all notes in this step (chord or single note)
-    for (uint8_t n : notesOn)
-    {
-      int transposedNote = constrain(n + 12 * transpose, 0, 127);
-      uint8_t v = rhythmVelocity;
-      if (velocityDynamicsPercent > 0)
-      {
-        int maxAdjustment = (v * velocityDynamicsPercent) / 100;
-        v = constrain(v - random(0, maxAdjustment + 1), 64, 127);
-      }
-      sendNoteOn(transposedNote, v);
-    }
-
-    timingOffset = (timingHumanize ? getTimingHumanizeOffset(noteLengthMs) : 0);
-    noteOnStartTime = now + timingOffset;
-    noteOnActive = true;
-    nextNoteTime += arpInterval;
-  }
-
-  // Send note off after note duration for all notes in the step
-  if (noteOnActive && now >= noteOnStartTime + randomizedNoteLengthMs)
-  {
-    for (uint8_t n : notesOn)
-    {
-      int transposedNote = constrain(n + 12 * transpose, 0, 127);
+      int transposedNote = constrain(note + 12 * transpose, 0, 127);
       sendNoteOff(transposedNote);
     }
+    notesOn.clear();
     noteOnActive = false;
-    if (++noteRepeatCounter >= noteRepeat)
+
+    if (!isRest)
     {
-      noteRepeatCounter = 0;
-      currentNoteIndex = (currentNoteIndex + 1) % stepNotes.size();
+      // Play the note(s) for this step
+      size_t chordSize = playingChord.size();
+      size_t noteIndex = currentNoteIndex % chordSize;
+      uint8_t note = playingChord[noteIndex];
+
+      // Determine velocity based on accent
+      bool isAccented = std::find(accents.begin(), accents.end(), rhythmIndex % noteLengths.size() + 1) != accents.end();
+      uint8_t velocity = isAccented ? 127 : 25; // 100% for accented, 20% for others
+
+      int transposedNote = constrain(note + 12 * transpose, 0, 127);
+      sendNoteOn(transposedNote, velocity);
+      notesOn.push_back(note);
+
+      noteOnStartTime = now;
+      noteOnActive = true;
     }
+
+    // Schedule the next step
+    nextNoteTime += currentNoteLengthMs;
+    rhythmIndex = (rhythmIndex + 1) % noteLengths.size();
+    if (!isRest)
+    {
+      currentNoteIndex = (currentNoteIndex + 1) % playingChord.size();
+    }
+  }
+
+  // Send note off after note duration if still active
+  if (noteOnActive && now >= noteOnStartTime + currentNoteLengthMs)
+  {
+    for (uint8_t note : notesOn)
+    {
+      int transposedNote = constrain(note + 12 * transpose, 0, 127);
+      sendNoteOff(transposedNote);
+    }
+    notesOn.clear();
+    noteOnActive = false;
   }
 
   // --- LED flash timing ---
