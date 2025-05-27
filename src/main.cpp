@@ -272,10 +272,10 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 14: // CC14 -> Note Balance
     noteBalancePercent = map(value, 0, 127, -100, 100);
     break;
-  case 15: // CC15 -> Notes Per Beat (Resolution)
-    notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
-    notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-    break;
+  //case 15: // CC15 -> Notes Per Beat (Resolution)
+  //  notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
+  //  notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
+  //  break;
   case 16: // CC16 -> Random Chord Percent
     randomChordPercent = map(value, 0, 127, 0, 100);
     break;
@@ -291,8 +291,6 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 20: // CC20 -> Steps (4/4 bar)
     stepsPerBarIndex = constrain(map(value, 0, 127, 0, stepsPerBarOptionsSize - 1), 0, stepsPerBarOptionsSize - 1);
     stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-    Serial.print("Steps (4/4 bar): ");
-    Serial.println(stepsPerBar);
     break;
   }
   // Update arpInterval to reflect the note length for a 4/4 bar
@@ -351,12 +349,12 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
 }
 
 template <typename T>
-void printIfChanged(const char *label, T &lastValue, T currentValue)
+void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
 {
   if (currentValue != lastValue)
   {
     Serial.print(label);
-    Serial.println(currentValue);
+    Serial.println(printValue);
     lastValue = currentValue;
   }
 }
@@ -459,6 +457,9 @@ void loop()
   // --- Parameter adjustment via encoder ---
   if (delta != 0)
   {
+    // Declare playingChord so it is visible to all cases that need it
+    std::vector<uint8_t> playingChord;
+
     switch (encoderMode)
     {
     case MODE_BPM:
@@ -567,13 +568,20 @@ void loop()
     case MODE_STEPS:
       stepsPerBarIndex = constrain(stepsPerBarIndex + delta, 0, stepsPerBarOptionsSize - 1);
       stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-      Serial.print("Steps (4/4 bar): ");
-      Serial.println(stepsPerBar);
       break;
     case MODE_BAR1:
       modeBar1 = !modeBar1;
       Serial.print("MODE_BAR1: ");
-      Serial.println(modeBar1 ? "ON" : "OFF");
+      Serial.print(modeBar1 ? "ON" : "OFF");
+      // Serial debug output
+      Serial.print("adj playingChord: ");
+      for (size_t i = 0; i < playingChord.size(); ++i)
+      {
+        Serial.print((int)playingChord[i]);
+        if (i < playingChord.size() - 1)
+          Serial.print(", ");
+      }
+      Serial.println();
       break;
     }
     // Update arpInterval to reflect the note length for a 4/4 bar
@@ -841,18 +849,7 @@ void loop()
       }
       adjustedPlayingChord.resize(steps); // Trim to exact size
     }
-
     playingChord = adjustedPlayingChord;
-
-    // Serial debug output
-    Serial.print("MODE_BAR1 adjusted playingChord: ");
-    for (size_t i = 0; i < playingChord.size(); ++i)
-    {
-      Serial.print((int)playingChord[i]);
-      if (i < playingChord.size() - 1)
-        Serial.print(", ");
-    }
-    Serial.println();
   }
 
   // --- Build stepNotes for random chord steps ---
@@ -964,21 +961,25 @@ void loop()
   static int lastNoteRangeStretch = noteRangeStretch;
   static int lastStepsPerBarIndex = stepsPerBarIndex;
 
-  printIfChanged("BPM: ", lastBPM, bpm);
-  printIfChanged("Note Length %: ", lastLength, noteLengthPercent);
-  printIfChanged("Velocity: ", lastVelocity, noteVelocity);
-  printIfChanged("Octave Range: ", lastOctave, octaveRange);
-  printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat);
-  printIfChanged("Transpose: ", lastTranspose, transpose);
-  printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent);
-  printIfChanged("Timing Humanize Percent: ", lastTimingHumanizePercent, timingHumanizePercent);
-  printIfChanged("Note Length Randomize Percent: ", lastNoteLengthRandomizePercent, noteLengthRandomizePercent);
-  printIfChanged("Note Balance Percent: ", lastNoteBalancePercent, noteBalancePercent);
-  printIfChanged("Random Chord Percent: ", lastRandomChordPercent, randomChordPercent);
-  printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern);
-  printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift);
-  printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch);
-  printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex);
+  printIfChanged("BPM: ", lastBPM, bpm, bpm);
+  printIfChanged("Note Length %: ", lastLength, noteLengthPercent, noteLengthPercent);
+  printIfChanged("Velocity: ", lastVelocity, noteVelocity, noteVelocity);
+  printIfChanged("Octave Range: ", lastOctave, octaveRange, octaveRange);
+  printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat, noteRepeat);
+  printIfChanged("Transpose: ", lastTranspose, transpose, transpose);
+  printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent, velocityDynamicsPercent);
+  printIfChanged("Timing Humanize Percent: ", lastTimingHumanizePercent, timingHumanizePercent, timingHumanizePercent);
+  printIfChanged("Note Length Randomize Percent: ", lastNoteLengthRandomizePercent, noteLengthRandomizePercent, noteLengthRandomizePercent);
+  printIfChanged("Note Balance Percent: ", lastNoteBalancePercent, noteBalancePercent, noteBalancePercent);
+  printIfChanged("Random Chord Percent: ", lastRandomChordPercent, randomChordPercent, randomChordPercent);
+  printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern, selectedRhythmPattern);
+  printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift, noteRangeShift);
+  printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch, noteRangeStretch);
+  printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
+
+  //stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+  //Serial.print("Steps (4/4 bar): ");
+  //Serial.println(stepsPerBar);
 
   if (encoderMode != lastMode)
   {
