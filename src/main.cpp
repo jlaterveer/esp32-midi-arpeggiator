@@ -287,8 +287,17 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 19: // CC19 -> Range Stretch
     noteRangeStretch = map(value, 0, 127, -24, 24);
     break;
+  case 20: // CC20 -> Steps (4/4 bar)
+    stepsPerBarIndex = constrain(map(value, 0, 127, 0, stepsPerBarOptionsSize - 1), 0, stepsPerBarOptionsSize - 1);
+    stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+    Serial.print("Steps (4/4 bar): ");
+    Serial.println(stepsPerBar);
+    break;
   }
-  arpInterval = 60000 / (bpm * notesPerBeat);
+  // Update arpInterval to reflect the note length for a 4/4 bar
+  unsigned long barLengthMs = 60000 / bpm * 4;
+  unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+  arpInterval = noteLengthMs;
 }
 
 // --- TIMING HUMANIZATION FUNCTION ---
