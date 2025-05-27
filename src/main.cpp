@@ -83,6 +83,7 @@ int noteRangeShift = 0;              // Range shift for lowest/highest note, -24
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
 int notesPerBeatIndex = 4;           // 4 notes per beat
 int noteRepeat = 1;                  // Number of repeats per note
+bool modeBar1 = false;               // MODE_BAR1 ON/OFF state
 
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
@@ -569,6 +570,11 @@ void loop()
       Serial.print("Steps (4/4 bar): ");
       Serial.println(stepsPerBar);
       break;
+    case MODE_BAR1:
+      modeBar1 = !modeBar1;
+      Serial.print("MODE_BAR1: ");
+      Serial.println(modeBar1 ? "ON" : "OFF");
+      break;
     }
     // Update arpInterval to reflect the note length for a 4/4 bar
     unsigned long barLengthMs = 60000 / bpm * 4;
@@ -815,8 +821,41 @@ void loop()
   // --- Apply note bias based on noteBalancePercent ---
   applyNoteBiasToChord(playingChord, noteBalancePercent);
 
+  // --- Apply MODE_BAR1 functionality ---
+  if (modeBar1)
+  {
+    std::vector<uint8_t> adjustedPlayingChord;
+    size_t steps = stepsPerBar;
+
+    if (playingChord.size() > steps)
+    {
+      // Limit the number of notes to the selected steps
+      adjustedPlayingChord.assign(playingChord.begin(), playingChord.begin() + steps);
+    }
+    else
+    {
+      // Repeat the playingChord until it matches the number of steps
+      while (adjustedPlayingChord.size() < steps)
+      {
+        adjustedPlayingChord.insert(adjustedPlayingChord.end(), playingChord.begin(), playingChord.end());
+      }
+      adjustedPlayingChord.resize(steps); // Trim to exact size
+    }
+
+    playingChord = adjustedPlayingChord;
+
+    // Serial debug output
+    Serial.print("MODE_BAR1 adjusted playingChord: ");
+    for (size_t i = 0; i < playingChord.size(); ++i)
+    {
+      Serial.print((int)playingChord[i]);
+      if (i < playingChord.size() - 1)
+        Serial.print(", ");
+    }
+    Serial.println();
+  }
+
   // --- Build stepNotes for random chord steps ---
-  // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
   std::vector<StepNotes> stepNotes;
   buildRandomChordSteps(stepNotes, playingChord, playedChord, randomChordPercent);
 
@@ -839,6 +878,12 @@ void loop()
     size_t chordSize = stepNotes.size();
     size_t noteIndex = currentNoteIndex % chordSize;
     notesOn = stepNotes[noteIndex].notes;
+
+    // Print step and note information
+    Serial.print("step-note: ");
+    Serial.print(currentNoteIndex + 1); // Step number (1-based index)
+    Serial.print("-");
+    Serial.println(noteIndex + 1); // Note number (1-based index)
 
     // --- Rhythm velocity calculation using pattern generator ---
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
@@ -947,7 +992,7 @@ void loop()
         "Pattern Reverse",
         "Pattern Smooth",
         "Steps (4/4 bar)",
-        //"Notes Per Beat",
+        "Bar1 Mode", // Added MODE_BAR1 to the mode names
         "Note Repeat",
         "Transpose",
         "Velocity Dynamics Percent",
