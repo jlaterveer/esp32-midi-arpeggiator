@@ -399,6 +399,17 @@ void setup()
   handleNoteOn(65);
   handleNoteOn(67);
   handleNoteOff(55);
+
+  // Initialize stepsPerBar and arpInterval
+  stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+  unsigned long barLengthMs = 60000 / bpm * 4;
+  unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+  arpInterval = noteLengthMs;
+
+  //Serial.print("Initial Steps (4/4 bar): ");
+  //Serial.println(stepsPerBar);
+  //Serial.print("Initial Arp Interval (ms): ");
+  //Serial.println(arpInterval);
 }
 
 // --- LOOP ---
