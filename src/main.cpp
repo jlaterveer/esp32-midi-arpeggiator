@@ -81,7 +81,7 @@ int noteBalancePercent = 0;          // Note bias percent
 int randomChordPercent = 0;          // Percentage of steps to replace with random 3-note chords
 int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
-int notesPerBeatIndex = 4;           // 4 notes per beat
+//int notesPerBeatIndex = 4;           // 4 notes per beat
 int noteRepeat = 1;                  // Number of repeats per note
 bool modeBar1 = false;               // MODE_BAR1 ON/OFF state
 
@@ -89,10 +89,10 @@ bool modeBar1 = false;               // MODE_BAR1 ON/OFF state
 int stepsPerBarIndex = 7;
 int stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
 
-int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
+//int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
 
 int noteRepeatCounter = 0;
-unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
+unsigned long arpInterval = 60000 / (bpm * stepsPerBar); // ms per note
 
 // --- RANDOM CHORD FUNCTION ---
 // At random steps, replace the note with a 3-note chord (from playedChord, close together)
