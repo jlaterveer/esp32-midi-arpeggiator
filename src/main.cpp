@@ -330,7 +330,9 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   if (chord.empty() || percent == 0)
     return;
   size_t chordSize = chord.size();
-  uint8_t targetNote = (percent < 0) ? chord.front() : chord.back();
+  std::vector<uint8_t> sortChord = chord;
+  std::sort(sortChord.begin(), sortChord.end());
+  uint8_t targetNote = (percent < 0) ? sortChord.front() : sortChord.back();
   int absPercent = abs(percent);
   size_t numToReplace = (chordSize > 1) ? ((chordSize * absPercent + 99) / 100) : 0;
   if (numToReplace == 0)
