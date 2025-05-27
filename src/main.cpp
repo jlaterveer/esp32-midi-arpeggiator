@@ -887,7 +887,7 @@ void loop()
   static int lastNoteRepeat = noteRepeat, lastTranspose = transpose;
   static EncoderMode lastMode = encoderMode;
   static int lastUseVelocityDynamics = velocityDynamicsPercent;
-  static bool lastTimingHumanize = timingHumanize;
+  static int lastTimingHumanize = timingHumanize;
   static int lastTimingHumanizePercent = timingHumanizePercent;
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   static int lastNoteBalancePercent = noteBalancePercent;

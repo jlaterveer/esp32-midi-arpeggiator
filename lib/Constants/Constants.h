@@ -52,7 +52,7 @@ enum EncoderMode
     MODE_PATTERN_PLAYBACK,
     MODE_REVERSE,
     MODE_SMOOTH, // Pattern smooth mode
-    MODE_RESOLUTION,
+    //MODE_RESOLUTION,
     MODE_REPEAT,
     MODE_TRANSPOSE,
     MODE_DYNAMICS,
