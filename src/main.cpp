@@ -81,13 +81,18 @@ int noteBalancePercent = 0;          // Note bias percent
 int randomChordPercent = 0;          // Percentage of steps to replace with random 3-note chords
 int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
-int notesPerBeatIndex = 4;           // 4 notes per beat
+//int notesPerBeatIndex = 4;           // 4 notes per beat
 int noteRepeat = 1;                  // Number of repeats per note
+bool modeBar1 = false;               // MODE_BAR1 ON/OFF state
 
-int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
+// Steps per bar (for 4/4 bar), default index 7 = 8 steps
+int stepsPerBarIndex = 7;
+int stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+
+//int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
 
 int noteRepeatCounter = 0;
-unsigned long arpInterval = 60000 / (bpm * notesPerBeat); // ms per note
+unsigned long arpInterval = 60000 / (bpm * stepsPerBar); // ms per note
 
 // --- RANDOM CHORD FUNCTION ---
 // At random steps, replace the note with a 3-note chord (from playedChord, close together)
@@ -267,10 +272,10 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 14: // CC14 -> Note Balance
     noteBalancePercent = map(value, 0, 127, -100, 100);
     break;
-  case 15: // CC15 -> Notes Per Beat (Resolution)
-    notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
-    notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-    break;
+  //case 15: // CC15 -> Notes Per Beat (Resolution)
+  //  notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
+  //  notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
+  //  break;
   case 16: // CC16 -> Random Chord Percent
     randomChordPercent = map(value, 0, 127, 0, 100);
     break;
@@ -283,8 +288,15 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 19: // CC19 -> Range Stretch
     noteRangeStretch = map(value, 0, 127, -24, 24);
     break;
+  case 20: // CC20 -> Steps (4/4 bar)
+    stepsPerBarIndex = constrain(map(value, 0, 127, 0, stepsPerBarOptionsSize - 1), 0, stepsPerBarOptionsSize - 1);
+    stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+    break;
   }
-  arpInterval = 60000 / (bpm * notesPerBeat);
+  // Update arpInterval to reflect the note length for a 4/4 bar
+  unsigned long barLengthMs = 60000 / bpm * 4;
+  unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+  arpInterval = noteLengthMs;
 }
 
 // --- TIMING HUMANIZATION FUNCTION ---
@@ -318,7 +330,9 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   if (chord.empty() || percent == 0)
     return;
   size_t chordSize = chord.size();
-  uint8_t targetNote = (percent < 0) ? chord.front() : chord.back();
+  std::vector<uint8_t> sortChord = chord;
+  std::sort(sortChord.begin(), sortChord.end());
+  uint8_t targetNote = (percent < 0) ? sortChord.front() : sortChord.back();
   int absPercent = abs(percent);
   size_t numToReplace = (chordSize > 1) ? ((chordSize * absPercent + 99) / 100) : 0;
   if (numToReplace == 0)
@@ -337,12 +351,12 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
 }
 
 template <typename T>
-void printIfChanged(const char *label, T &lastValue, T currentValue)
+void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
 {
   if (currentValue != lastValue)
   {
     Serial.print(label);
-    Serial.println(currentValue);
+    Serial.println(printValue);
     lastValue = currentValue;
   }
 }
@@ -445,6 +459,9 @@ void loop()
   // --- Parameter adjustment via encoder ---
   if (delta != 0)
   {
+    // Declare playingChord so it is visible to all cases that need it
+    std::vector<uint8_t> playingChord;
+
     switch (encoderMode)
     {
     case MODE_BPM:
@@ -502,10 +519,6 @@ void loop()
       Serial.print("] ");
       Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
       break;
-    case MODE_RESOLUTION:
-      notesPerBeatIndex = constrain(notesPerBeatIndex + delta, 0, notesPerBeatOptionsSize - 1);
-      notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-      break;
     case MODE_REPEAT:
       noteRepeat = constrain(noteRepeat + delta, 1, 4);
       break;
@@ -554,8 +567,29 @@ void loop()
     case MODE_STRETCH:
       noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
       break;
+    case MODE_STEPS:
+      stepsPerBarIndex = constrain(stepsPerBarIndex + delta, 0, stepsPerBarOptionsSize - 1);
+      stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+      break;
+    case MODE_BAR1:
+      modeBar1 = !modeBar1;
+      Serial.print("MODE_BAR1: ");
+      Serial.print(modeBar1 ? "ON" : "OFF");
+      // Serial debug output
+      Serial.print("adj playingChord: ");
+      for (size_t i = 0; i < playingChord.size(); ++i)
+      {
+        Serial.print((int)playingChord[i]);
+        if (i < playingChord.size() - 1)
+          Serial.print(", ");
+      }
+      Serial.println();
+      break;
     }
-    arpInterval = 60000 / (bpm * notesPerBeat);
+    // Update arpInterval to reflect the note length for a 4/4 bar
+    unsigned long barLengthMs = 60000 / bpm * 4;
+    unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+    arpInterval = noteLengthMs;
   }
 
   // --- MIDI IN (hardware) ---
@@ -797,8 +831,30 @@ void loop()
   // --- Apply note bias based on noteBalancePercent ---
   applyNoteBiasToChord(playingChord, noteBalancePercent);
 
+  // --- Apply MODE_BAR1 functionality ---
+  if (modeBar1)
+  {
+    std::vector<uint8_t> adjustedPlayingChord;
+    size_t steps = stepsPerBar;
+
+    if (playingChord.size() > steps)
+    {
+      // Limit the number of notes to the selected steps
+      adjustedPlayingChord.assign(playingChord.begin(), playingChord.begin() + steps);
+    }
+    else
+    {
+      // Repeat the playingChord until it matches the number of steps
+      while (adjustedPlayingChord.size() < steps)
+      {
+        adjustedPlayingChord.insert(adjustedPlayingChord.end(), playingChord.begin(), playingChord.end());
+      }
+      adjustedPlayingChord.resize(steps); // Trim to exact size
+    }
+    playingChord = adjustedPlayingChord;
+  }
+
   // --- Build stepNotes for random chord steps ---
-  // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
   std::vector<StepNotes> stepNotes;
   buildRandomChordSteps(stepNotes, playingChord, playedChord, randomChordPercent);
 
@@ -821,6 +877,12 @@ void loop()
     size_t chordSize = stepNotes.size();
     size_t noteIndex = currentNoteIndex % chordSize;
     notesOn = stepNotes[noteIndex].notes;
+
+    // Print step and note information
+    Serial.print("step-note: ");
+    Serial.print(currentNoteIndex + 1); // Step number (1-based index)
+    Serial.print("-");
+    Serial.println(noteIndex + 1); // Note number (1-based index)
 
     // --- Rhythm velocity calculation using pattern generator ---
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
@@ -888,10 +950,10 @@ void loop()
 
   // --- Serial debug output for parameter changes ---
   static int lastBPM = bpm, lastLength = noteLengthPercent, lastVelocity = noteVelocity, lastOctave = octaveRange;
-  static int lastResolutionIndex = notesPerBeatIndex, lastNoteRepeat = noteRepeat, lastTranspose = transpose;
+  static int lastNoteRepeat = noteRepeat, lastTranspose = transpose;
   static EncoderMode lastMode = encoderMode;
   static int lastUseVelocityDynamics = velocityDynamicsPercent;
-  static bool lastTimingHumanize = timingHumanize;
+  static int lastTimingHumanize = timingHumanize;
   static int lastTimingHumanizePercent = timingHumanizePercent;
   static int lastNoteLengthRandomizePercent = noteLengthRandomizePercent;
   static int lastNoteBalancePercent = noteBalancePercent;
@@ -899,22 +961,27 @@ void loop()
   static int lastRhythmPattern = selectedRhythmPattern;
   static int lastNoteRangeShift = noteRangeShift;
   static int lastNoteRangeStretch = noteRangeStretch;
+  static int lastStepsPerBarIndex = stepsPerBarIndex;
 
-  printIfChanged("BPM: ", lastBPM, bpm);
-  printIfChanged("Note Length %: ", lastLength, noteLengthPercent);
-  printIfChanged("Velocity: ", lastVelocity, noteVelocity);
-  printIfChanged("Octave Range: ", lastOctave, octaveRange);
-  printIfChanged("Notes Per Beat: ", lastResolutionIndex, notesPerBeatIndex);
-  printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat);
-  printIfChanged("Transpose: ", lastTranspose, transpose);
-  printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent);
-  printIfChanged("Timing Humanize Percent: ", lastTimingHumanizePercent, timingHumanizePercent);
-  printIfChanged("Note Length Randomize Percent: ", lastNoteLengthRandomizePercent, noteLengthRandomizePercent);
-  printIfChanged("Note Balance Percent: ", lastNoteBalancePercent, noteBalancePercent);
-  printIfChanged("Random Chord Percent: ", lastRandomChordPercent, randomChordPercent);
-  printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern);
-  printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift);
-  printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch);
+  printIfChanged("BPM: ", lastBPM, bpm, bpm);
+  printIfChanged("Note Length %: ", lastLength, noteLengthPercent, noteLengthPercent);
+  printIfChanged("Velocity: ", lastVelocity, noteVelocity, noteVelocity);
+  printIfChanged("Octave Range: ", lastOctave, octaveRange, octaveRange);
+  printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat, noteRepeat);
+  printIfChanged("Transpose: ", lastTranspose, transpose, transpose);
+  printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent, velocityDynamicsPercent);
+  printIfChanged("Timing Humanize Percent: ", lastTimingHumanizePercent, timingHumanizePercent, timingHumanizePercent);
+  printIfChanged("Note Length Randomize Percent: ", lastNoteLengthRandomizePercent, noteLengthRandomizePercent, noteLengthRandomizePercent);
+  printIfChanged("Note Balance Percent: ", lastNoteBalancePercent, noteBalancePercent, noteBalancePercent);
+  printIfChanged("Random Chord Percent: ", lastRandomChordPercent, randomChordPercent, randomChordPercent);
+  printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern, selectedRhythmPattern);
+  printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift, noteRangeShift);
+  printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch, noteRangeStretch);
+  printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
+
+  //stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+  //Serial.print("Steps (4/4 bar): ");
+  //Serial.println(stepsPerBar);
 
   if (encoderMode != lastMode)
   {
@@ -927,7 +994,8 @@ void loop()
         "Pattern Playback Mode",
         "Pattern Reverse",
         "Pattern Smooth",
-        "Notes Per Beat",
+        "Steps (4/4 bar)",
+        "Bar1 Mode", // Added MODE_BAR1 to the mode names
         "Note Repeat",
         "Transpose",
         "Velocity Dynamics Percent",

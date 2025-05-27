@@ -24,13 +24,18 @@ const int minTranspose = -3;
 const int maxTranspose = 3;
 
 // Note resolution options (notes per beat)
-const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
-const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
+//const int notesPerBeatOptions[] = {1, 2, 3, 4, 6, 8, 12, 16};
+//const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
+
+// Steps per bar options for a 4-beat bar
+const int stepsPerBarOptions[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16};
+const int stepsPerBarOptionsSize = sizeof(stepsPerBarOptions) / sizeof(stepsPerBarOptions[0]);
 
 // extern variables
 extern int bpm;
 extern unsigned long arpInterval;
-extern int notesPerBeat;
+//extern int notesPerBeat;
+extern int stepsPerBar;
 
 // --- Extern declarations for arpeggiator/chord state (needed by midiUtils.cpp) ---
 extern bool capturingChord;
@@ -52,7 +57,8 @@ enum EncoderMode
     MODE_PATTERN_PLAYBACK,
     MODE_REVERSE,
     MODE_SMOOTH, // Pattern smooth mode
-    MODE_RESOLUTION,
+    MODE_STEPS,  // Number of steps in a 4-beat bar
+    MODE_BAR1,   // Limit or repeat playingChord to match steps
     MODE_REPEAT,
     MODE_TRANSPOSE,
     MODE_DYNAMICS,

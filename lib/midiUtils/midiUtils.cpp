@@ -97,7 +97,8 @@ void handleMidiClock()
     {
       float newBpm = 60000.0f / interval;
       bpm = constrain((int)newBpm, 40, 240);
-      arpInterval = 60000 / (bpm * notesPerBeat);
+      // Use stepsPerBar instead of notesPerBeat for arpInterval calculation
+      arpInterval = 60000 / (bpm * stepsPerBar);
     }
     clockCount = 0;
   }
