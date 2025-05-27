@@ -84,6 +84,10 @@ int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -
 int notesPerBeatIndex = 4;           // 4 notes per beat
 int noteRepeat = 1;                  // Number of repeats per note
 
+// Steps per bar (for 4/4 bar), default index 7 = 8 steps
+int stepsPerBarIndex = 7;
+int stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+
 int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
 
 int noteRepeatCounter = 0;
@@ -550,8 +554,17 @@ void loop()
     case MODE_STRETCH:
       noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
       break;
+    case MODE_STEPS:
+      stepsPerBarIndex = constrain(stepsPerBarIndex + delta, 0, stepsPerBarOptionsSize - 1);
+      stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+      Serial.print("Steps (4/4 bar): ");
+      Serial.println(stepsPerBar);
+      break;
     }
-    arpInterval = 60000 / (bpm * notesPerBeat);
+    // Update arpInterval to reflect the note length for a 4/4 bar
+    unsigned long barLengthMs = 60000 / bpm * 4;
+    unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+    arpInterval = noteLengthMs;
   }
 
   // --- MIDI IN (hardware) ---
@@ -895,6 +908,7 @@ void loop()
   static int lastRhythmPattern = selectedRhythmPattern;
   static int lastNoteRangeShift = noteRangeShift;
   static int lastNoteRangeStretch = noteRangeStretch;
+  static int lastStepsPerBarIndex = stepsPerBarIndex;
 
   printIfChanged("BPM: ", lastBPM, bpm);
   printIfChanged("Note Length %: ", lastLength, noteLengthPercent);
@@ -910,6 +924,7 @@ void loop()
   printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern);
   printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift);
   printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch);
+  printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex);
 
   if (encoderMode != lastMode)
   {
@@ -922,6 +937,7 @@ void loop()
         "Pattern Playback Mode",
         "Pattern Reverse",
         "Pattern Smooth",
+        "Steps (4/4 bar)",
         //"Notes Per Beat",
         "Note Repeat",
         "Transpose",
