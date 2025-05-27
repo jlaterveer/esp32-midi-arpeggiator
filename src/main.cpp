@@ -502,10 +502,6 @@ void loop()
       Serial.print("] ");
       Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
       break;
-    case MODE_RESOLUTION:
-      notesPerBeatIndex = constrain(notesPerBeatIndex + delta, 0, notesPerBeatOptionsSize - 1);
-      notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-      break;
     case MODE_REPEAT:
       noteRepeat = constrain(noteRepeat + delta, 1, 4);
       break;
@@ -888,7 +884,7 @@ void loop()
 
   // --- Serial debug output for parameter changes ---
   static int lastBPM = bpm, lastLength = noteLengthPercent, lastVelocity = noteVelocity, lastOctave = octaveRange;
-  static int lastResolutionIndex = notesPerBeatIndex, lastNoteRepeat = noteRepeat, lastTranspose = transpose;
+  static int lastNoteRepeat = noteRepeat, lastTranspose = transpose;
   static EncoderMode lastMode = encoderMode;
   static int lastUseVelocityDynamics = velocityDynamicsPercent;
   static bool lastTimingHumanize = timingHumanize;
@@ -904,7 +900,6 @@ void loop()
   printIfChanged("Note Length %: ", lastLength, noteLengthPercent);
   printIfChanged("Velocity: ", lastVelocity, noteVelocity);
   printIfChanged("Octave Range: ", lastOctave, octaveRange);
-  printIfChanged("Notes Per Beat: ", lastResolutionIndex, notesPerBeatIndex);
   printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat);
   printIfChanged("Transpose: ", lastTranspose, transpose);
   printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent);
@@ -927,7 +922,7 @@ void loop()
         "Pattern Playback Mode",
         "Pattern Reverse",
         "Pattern Smooth",
-        "Notes Per Beat",
+        //"Notes Per Beat",
         "Note Repeat",
         "Transpose",
         "Velocity Dynamics Percent",
