@@ -6,6 +6,7 @@
 #include "PatternGenerators.h"
 #include "Constants.h"
 #include "midiUtils.h"
+#include "ArpUtils.h"
 
 // EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
@@ -946,28 +947,7 @@ void loop()
   printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
 
   if (encoderMode != lastMode)
-  {
-    static const char *modeNames[] = {
-        "BPM",
-        "Note Length %",
-        "Velocity",
-        "Octave Range",
-        "Pattern",
-        "Pattern Playback Mode",
-        "Pattern Reverse",
-        "Pattern Smooth",
-        "Steps (4/4 bar)",
-        "Bar Mode",
-        "Note Repeat",
-        "Transpose",
-        "Velocity Dynamics Percent",
-        "Timing Humanize Percent",
-        "Note Length Randomize Percent",
-        "Note Balance Percent",
-        "Random Chord Percent",
-        "Rhythm Pattern",
-        "Range Shift",
-        "Range Stretch"};
+  { 
     Serial.print("Encoder Mode: ");
     if (encoderMode >= 0 && encoderMode < (int)(sizeof(modeNames) / sizeof(modeNames[0])))
       Serial.println(modeNames[encoderMode]);
