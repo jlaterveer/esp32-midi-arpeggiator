@@ -573,7 +573,7 @@ void loop()
     case MODE_BAR:
       modeBar = !modeBar;
       Serial.print("MODE_BAR: ");
-      Serial.print(modeBar ? "FIT" : "NORMAL");
+      Serial.println(modeBar ? "FIT" : "NORMAL");
       break;
     }
     // Update arpInterval to reflect the note length for a 4/4 bar
@@ -838,10 +838,10 @@ void loop()
     notesOn = stepNotes[noteIndex].notes;
 
     // Print step and note information
-    Serial.print("step-note: ");
-    Serial.print(currentNoteIndex + 1); // Step number (1-based index)
-    Serial.print("-");
-    Serial.println(noteIndex + 1); // Note number (1-based index)
+    //Serial.print("step-note: ");
+    //Serial.print(currentNoteIndex + 1); // Step number (1-based index)
+    //Serial.print("-");
+    //Serial.println(noteIndex + 1); // Note number (1-based index)
 
     // --- Rhythm velocity calculation using pattern generator ---
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
@@ -849,8 +849,15 @@ void loop()
     float rhythmMult = 1.0f;
     if (!rhythmPatternIndices.empty())
     {
-      uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
-      uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      std::vector<uint8_t> sortrhythmPatternIndices = rhythmPatternIndices;
+      std::sort(sortrhythmPatternIndices.begin(), sortrhythmPatternIndices.end());
+      //uint8_t targetNote = (percent < 0) ? sortChord.front() : sortChord.back();
+
+      uint8_t minIdx = sortrhythmPatternIndices.front();
+      uint8_t maxIdx = sortrhythmPatternIndices.back();
+
+      //uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      //uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
       uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
       if (maxIdx > minIdx)
       {
