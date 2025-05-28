@@ -28,7 +28,7 @@ const int maxTranspose = 3;
 //const int notesPerBeatOptionsSize = sizeof(notesPerBeatOptions) / sizeof(notesPerBeatOptions[0]);
 
 // Steps per bar options for a 4-beat bar
-const int stepsPerBarOptions[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16};
+const int stepsPerBarOptions[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16, 24, 32};
 const int stepsPerBarOptionsSize = sizeof(stepsPerBarOptions) / sizeof(stepsPerBarOptions[0]);
 
 // extern variables
