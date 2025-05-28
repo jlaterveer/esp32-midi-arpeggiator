@@ -717,25 +717,25 @@ void loop()
   std::vector<uint8_t> playingChord;
   if (patternSmooth && octaveRange != 0 && !patternIndicesFinal.empty())
   {
-    int octStart, octEnd, octStep;
+    int octStart, octEnd;
+    int octStep = 1; // Set octStep outside the if-else block
+
     if (octaveRange > 0)
     {
       octStart = 0;
       octEnd = octaveRange;
-      octStep = 1;
     }
     else if (octaveRange < 0)
     {
       octStart = octaveRange;
       octEnd = 0;
-      octStep = 1;
     }
     else
     {
       octStart = 0;
       octEnd = 0;
-      octStep = 1;
     }
+
     int prevNote = -1;
     bool first = true;
     for (int oct = octStart; (octStep > 0) ? (oct <= octEnd) : (oct >= octEnd); oct += octStep)
@@ -950,7 +950,7 @@ void loop()
         "Pattern Reverse",
         "Pattern Smooth",
         "Steps (4/4 bar)",
-        "Bar Mode", 
+        "Bar Mode",
         "Note Repeat",
         "Transpose",
         "Velocity Dynamics Percent",
