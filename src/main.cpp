@@ -81,9 +81,8 @@ int noteBalancePercent = 0;          // Note bias percent
 int randomChordPercent = 0;          // Percentage of steps to replace with random 3-note chords
 int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
-//int notesPerBeatIndex = 4;           // 4 notes per beat
 int noteRepeat = 1;                  // Number of repeats per note
-bool modeBar1 = false;               // MODE_BAR1 ON/OFF state
+bool modeBar = false;               // MODE_BAR ON/OFF state
 
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
@@ -383,7 +382,6 @@ void setup()
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN
   Serial2.begin(31250, SERIAL_8N1, -1, midiOutTxPin); // MIDI OUT
 
-  // USBDevice.setProductDescriptor("MyMIDIController"); // Removed: USBDevice is undefined on ESP32/Arduino
   USB.begin();
   usbMIDI.begin();
 
@@ -406,10 +404,6 @@ void setup()
   unsigned long noteLengthMs = barLengthMs / stepsPerBar;
   arpInterval = noteLengthMs;
 
-  //Serial.print("Initial Steps (4/4 bar): ");
-  //Serial.println(stepsPerBar);
-  //Serial.print("Initial Arp Interval (ms): ");
-  //Serial.println(arpInterval);
 }
 
 // --- LOOP ---
@@ -557,12 +551,12 @@ void loop()
     case MODE_REVERSE:
       patternReverse = !patternReverse;
       Serial.print("Pattern Reverse: ");
-      Serial.println(patternReverse ? "ON" : "OFF");
+      Serial.println(patternReverse ? "REVERSE" : "NORMAL");
       break;
     case MODE_SMOOTH:
       patternSmooth = !patternSmooth;
       Serial.print("Pattern Smooth: ");
-      Serial.println(patternSmooth ? "ON" : "OFF");
+      Serial.println(patternSmooth ? "SMOOTH" : "NORMAL");
       break;
     case MODE_RANDOM_CHORD:
       randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
@@ -582,19 +576,10 @@ void loop()
       stepsPerBarIndex = constrain(stepsPerBarIndex + delta, 0, stepsPerBarOptionsSize - 1);
       stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
       break;
-    case MODE_BAR1:
-      modeBar1 = !modeBar1;
-      Serial.print("MODE_BAR1: ");
-      Serial.print(modeBar1 ? "ON" : "OFF");
-      // Serial debug output
-      Serial.print("adj playingChord: ");
-      for (size_t i = 0; i < playingChord.size(); ++i)
-      {
-        Serial.print((int)playingChord[i]);
-        if (i < playingChord.size() - 1)
-          Serial.print(", ");
-      }
-      Serial.println();
+    case MODE_BAR:
+      modeBar = !modeBar;
+      Serial.print("MODE_BAR: ");
+      Serial.print(modeBar ? "FIT" : "NORMAL");
       break;
     }
     // Update arpInterval to reflect the note length for a 4/4 bar
@@ -610,38 +595,7 @@ void loop()
   // --- MIDI IN (USB) ---
   processUsbMidiPackets(usbMIDI);
 
-  /*
-  midiEventPacket_t packet;
-  while (usbMIDI.readPacket(&packet))
-  {
-    uint8_t cin = packet.header & 0x0F;
-    if (packet.byte1 == 0xF8)
-    {
-      handleMidiClock();
-      continue;
-    }
-    switch (cin)
-    {
-    case 0x09: // Note On
-      if (packet.byte3 > 0)
-        handleNoteOn(packet.byte2);
-      else
-        handleNoteOff(packet.byte2);
-      break;
-    case 0x08: // Note Off
-      handleNoteOff(packet.byte2);
-      break;
-    case 0x0B: // Control Change (CC)
-      handleMidiCC(packet.byte2, packet.byte3);
-      break;
-    default:
-      // No action for other CIN values
-      break;
-    }
-  }
-  */
-
-  // --- Chord processing ---
+    // --- Chord processing ---
   // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
   std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
 
@@ -842,8 +796,8 @@ void loop()
   // --- Apply note bias based on noteBalancePercent ---
   applyNoteBiasToChord(playingChord, noteBalancePercent);
 
-  // --- Apply MODE_BAR1 functionality ---
-  if (modeBar1)
+  // --- Apply MODE_BAR functionality ---
+  if (modeBar)
   {
     std::vector<uint8_t> adjustedPlayingChord;
     size_t steps = stepsPerBar;
@@ -1006,7 +960,7 @@ void loop()
         "Pattern Reverse",
         "Pattern Smooth",
         "Steps (4/4 bar)",
-        "Bar1 Mode", // Added MODE_BAR1 to the mode names
+        "Bar Mode", // Added MODE_BAR to the mode names
         "Note Repeat",
         "Transpose",
         "Velocity Dynamics Percent",
