@@ -11,8 +11,7 @@
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
 
 // --- CONFIGURATION ---
-// Pin assignments for MIDI, LED, encoder, and buttons
-// (moved to Constants.h)
+// Pin assignments for MIDI, LED, encoder, and buttons moved to Constants.h
 
 // --- ENCODER STATE MACHINE ---
 // Rotary encoder state table for quadrature decoding
@@ -82,13 +81,13 @@ int randomChordPercent = 0;          // Percentage of steps to replace with rand
 int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
 int noteRepeat = 1;                  // Number of repeats per note
-bool modeBar = false;               // MODE_BAR ON/OFF state
+bool modeBar = false;                // MODE_BAR ON/OFF state
 
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
 int stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
 
-//int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
+// int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
 
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * stepsPerBar); // ms per note
@@ -244,7 +243,7 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     selectedPatternIndex = constrain(map(value, 0, 127, 0, PAT_COUNT - 1), 0, PAT_COUNT - 1);
     break;
   case 6: // CC6 -> Pattern Playback Mode
-    patternPlaybackMode = (value < 64) ? STRAIGHT : LOOP;
+    patternPlaybackMode = (value >= 64) ? LOOP : STRAIGHT;
     break;
   case 7: // CC7 -> Pattern Reverse
     patternReverse = (value >= 64);
@@ -271,10 +270,6 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 14: // CC14 -> Note Balance
     noteBalancePercent = map(value, 0, 127, -100, 100);
     break;
-  //case 15: // CC15 -> Notes Per Beat (Resolution)
-  //  notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
-  //  notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-  //  break;
   case 16: // CC16 -> Random Chord Percent
     randomChordPercent = map(value, 0, 127, 0, 100);
     break;
@@ -403,7 +398,6 @@ void setup()
   unsigned long barLengthMs = 60000 / bpm * 4;
   unsigned long noteLengthMs = barLengthMs / stepsPerBar;
   arpInterval = noteLengthMs;
-
 }
 
 // --- LOOP ---
@@ -595,7 +589,7 @@ void loop()
   // --- MIDI IN (USB) ---
   processUsbMidiPackets(usbMIDI);
 
-    // --- Chord processing ---
+  // --- Chord processing ---
   // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
   std::vector<uint8_t> baseChord = capturingChord ? tempChord : currentChord;
 
@@ -944,10 +938,6 @@ void loop()
   printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch, noteRangeStretch);
   printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
 
-  //stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-  //Serial.print("Steps (4/4 bar): ");
-  //Serial.println(stepsPerBar);
-
   if (encoderMode != lastMode)
   {
     static const char *modeNames[] = {
@@ -960,7 +950,7 @@ void loop()
         "Pattern Reverse",
         "Pattern Smooth",
         "Steps (4/4 bar)",
-        "Bar Mode", // Added MODE_BAR to the mode names
+        "Bar Mode", 
         "Note Repeat",
         "Transpose",
         "Velocity Dynamics Percent",
