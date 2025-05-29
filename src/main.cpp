@@ -66,14 +66,38 @@ bool modeBar = false;                // MODE_BAR ON/OFF state
 bool patternReverse = false;         // REVERSE mode for pattern playback
 bool patternSmooth = true;           // SMOOTH mode for pattern playback
 
+// Debounce state for encoder switch
+static uint16_t encoderSWDebounce = 0; 
+
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
 int stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
 
-// int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * stepsPerBar); // ms per note
+
+// --- LED FLASH STATE ---
+unsigned long ledFlashStart = 0;            // When did LED flash start
+bool ledFlashing = false;                   // Is LED currently flashing
+const unsigned long ledFlashDuration = 100; // ms
+
+// --- Clear button handling ---
+void handleClearButton()
+{
+  static bool lastClear = HIGH;
+  bool currentClear = digitalRead(clearButtonPin);
+  // If clear button pressed, clear chord and reset state
+  if (lastClear == HIGH && currentClear == LOW)
+  {
+    currentChord.clear();
+    currentNoteIndex = 0;
+    noteRepeatCounter = 0;
+    neopixelWrite(ledBuiltIn, 0, 0, 64); // Blue LED flash
+    ledFlashStart = millis();
+    ledFlashing = true;
+  }
+  lastClear = currentClear;
+}
 
 // --- RANDOM CHORD FUNCTION ---
 // At random steps, replace the note with a 3-note chord (from playedChord, close together)
@@ -182,6 +206,7 @@ int selectedPatternIndex = 0;
 // stretchedChord: The chord after applying range stretch (used for final pattern generation).
 // playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift/stretch.
 // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
+
 std::vector<uint8_t> currentChord; // Latched chord
 std::vector<uint8_t> tempChord;    // Chord being captured
 uint8_t leadNote = 0;              // First note of chord
@@ -191,10 +216,7 @@ bool noteOnActive = false;         // Is a note currently on?
 unsigned long noteOnStartTime = 0; // When was note on sent
 uint8_t lastPlayedNote = 0;        // Last note played
 
-// --- LED FLASH STATE ---
-unsigned long ledFlashStart = 0;            // When did LED flash start
-bool ledFlashing = false;                   // Is LED currently flashing
-const unsigned long ledFlashDuration = 100; // ms
+
 
 // --- MIDI I/O ---
 USBMIDI usbMIDI; // USB MIDI object
@@ -327,9 +349,7 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   }
 }
 
-// --- Encoder switch shift-register debounce ---
-// Debounce state for encoder switch
-static uint16_t encoderSWDebounce = 0;
+
 
 // --- SETUP ---
 // Initialize all hardware and state
@@ -382,6 +402,10 @@ void loop()
   unsigned long now = millis();
 
   // --- Clear button handling ---
+  handleClearButton();
+
+  /*
+  // --- Clear button handling ---
   static bool lastClear = HIGH;
   bool currentClear = digitalRead(clearButtonPin);
   // If clear button pressed, clear chord and reset state
@@ -395,6 +419,7 @@ void loop()
     ledFlashing = true;
   }
   lastClear = currentClear;
+  */
 
   // --- Encoder switch shift-register debounce ---
   encoderSWDebounce = (encoderSWDebounce << 1) | !digitalRead(encoderSW);
