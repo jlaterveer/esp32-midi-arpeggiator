@@ -67,7 +67,35 @@ bool patternReverse = false;         // REVERSE mode for pattern playback
 bool patternSmooth = true;           // SMOOTH mode for pattern playback
 
 // Debounce state for encoder switch
-static uint16_t encoderSWDebounce = 0; 
+static uint16_t encoderSWDebounce = 0;
+
+unsigned long calculateBarLength(int bpm, int top, int bottom)
+{
+  float beatLengthMs = 0;
+
+  // Determine the note value of 1 beat in ms
+  // A quarter note (1/4) is the standard beat unit for BPM
+  float quarterNoteMs = 60000.0 / bpm;
+
+  // Simple meter: beat = denominator note
+  // Compound meter: beat = dotted note (3 sub-notes per beat)
+  if (top % 3 == 0 && top > 3)
+  {
+    // Compound meter
+    int compoundBeats = top / 3;
+    // Convert dotted note to fraction of quarter note
+    float dottedNoteFactor = 4.0 / bottom * 3; // e.g. 8 -> 1.5, 16 -> 0.75
+    beatLengthMs = quarterNoteMs * dottedNoteFactor;
+    return compoundBeats * beatLengthMs;
+  }
+  else
+  {
+    // Simple meter
+    float noteFactor = 4.0 / bottom; // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
+    beatLengthMs = quarterNoteMs * noteFactor;
+    return top * beatLengthMs;
+  }
+}
 
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
@@ -98,6 +126,8 @@ void handleClearButton()
   }
   lastClear = currentClear;
 }
+
+
 
 // --- RANDOM CHORD FUNCTION ---
 // At random steps, replace the note with a 3-note chord (from playedChord, close together)
@@ -390,7 +420,11 @@ void setup()
 
   // Initialize stepsPerBar and arpInterval
   stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-  unsigned long barLengthMs = 60000 / bpm * 4;
+
+  unsigned long barLengthMs = calculateBarLength(bpm, 6, 8); // 6/8 at 120 BPM
+  Serial.println(barLengthMs);                               // Should print 1000
+
+  //unsigned long barLengthMs = 60000 / bpm * 4;
   unsigned long noteLengthMs = barLengthMs / stepsPerBar;
   arpInterval = noteLengthMs;
 }
