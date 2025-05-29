@@ -323,7 +323,8 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     break;
   }
   // Update arpInterval to reflect the note length for a 4/4 bar
-  unsigned long barLengthMs = 60000 / bpm * 4;
+  unsigned long barLengthMs = calculateBarLength(bpm, 6, 8);
+  //unsigned long barLengthMs = 60000 / bpm * 4;
   unsigned long noteLengthMs = barLengthMs / stepsPerBar;
   arpInterval = noteLengthMs;
 }
@@ -611,7 +612,8 @@ void loop()
       break;
     }
     // Update arpInterval to reflect the note length for a 4/4 bar
-    unsigned long barLengthMs = 60000 / bpm * 4;
+    //unsigned long barLengthMs = 60000 / bpm * 4;
+    unsigned long barLengthMs = calculateBarLength(bpm, 6, 8);
     unsigned long noteLengthMs = barLengthMs / stepsPerBar;
     arpInterval = noteLengthMs;
   }
