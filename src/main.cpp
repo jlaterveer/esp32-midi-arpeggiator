@@ -15,17 +15,9 @@
 // Pin assignments for MIDI, LED, encoder, and buttons moved to Constants.h
 
 // --- ENCODER STATE MACHINE ---
-// Rotary encoder state table for quadrature decoding
-const unsigned char ttable[6][4] = {
-    {0x3, 0x2, 0x1, 0x0}, {0x23, 0x0, 0x1, 0x0}, {0x13, 0x2, 0x0, 0x0}, {0x3, 0x5, 0x4, 0x0}, {0x3, 0x3, 0x4, 0x10}, {0x3, 0x5, 0x3, 0x20}};
-volatile unsigned char state = 0;
+// Rotary encoder state table for quadrature decoding moved to ArpUtils.cpp/.h
 
-// Initialize rotary encoder pins
-void rotary_init()
-{
-  pinMode(encoder0PinA, INPUT_PULLUP);
-  pinMode(encoder0PinB, INPUT_PULLUP);
-}
+
 
 // Process rotary encoder state and return direction
 unsigned char rotary_process()
@@ -50,19 +42,7 @@ EncoderMode encoderMode = MODE_BPM;
 
 const int encoderModeSize = MODE_COUNT; // Use enum count for size
 
-// --- STRAIGHT/LOOP mode for pattern playback ---
-enum PatternPlaybackMode
-{
-  STRAIGHT,
-  LOOP
-};
 PatternPlaybackMode patternPlaybackMode = LOOP;
-
-// --- REVERSE mode for pattern playback ---
-bool patternReverse = false;
-
-// --- SMOOTH mode for pattern playback ---
-bool patternSmooth = true;
 
 // --- PARAMETERS ---
 // (moved to Constants.h)
@@ -83,6 +63,8 @@ int noteRangeShift = 0;              // Range shift for lowest/highest note, -24
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
 int noteRepeat = 1;                  // Number of repeats per note
 bool modeBar = false;                // MODE_BAR ON/OFF state
+bool patternReverse = false;         // REVERSE mode for pattern playback
+bool patternSmooth = true;           // SMOOTH mode for pattern playback
 
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
@@ -345,18 +327,6 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   }
 }
 
-/*
-template <typename T>
-void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
-{
-  if (currentValue != lastValue)
-  {
-    Serial.print(label);
-    Serial.println(printValue);
-    lastValue = currentValue;
-  }
-}*/
-
 // --- Encoder switch shift-register debounce ---
 // Debounce state for encoder switch
 static uint16_t encoderSWDebounce = 0;
@@ -365,11 +335,14 @@ static uint16_t encoderSWDebounce = 0;
 // Initialize all hardware and state
 void setup()
 {
+  // Initialize rotary encoder pins
+  pinMode(encoder0PinA, INPUT_PULLUP);
+  pinMode(encoder0PinB, INPUT_PULLUP);
+  pinMode(encoderSW, INPUT_PULLUP);
+
   pinMode(ledBuiltIn, OUTPUT);
   pinMode(clearButtonPin, INPUT_PULLUP);
-  pinMode(encoderSW, INPUT_PULLUP);
-  rotary_init();
-
+  
   Serial.begin(115200); // Debug
   unsigned long serialStart = millis();
   while (!Serial && millis() - serialStart < 3000)

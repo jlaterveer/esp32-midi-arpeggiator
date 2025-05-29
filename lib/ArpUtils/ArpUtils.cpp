@@ -38,3 +38,9 @@ void printIfChanged(const char *label, T &lastValue, T currentValue, T printValu
 template void printIfChanged<int>(const char *, int &, int, int);
 template void printIfChanged<bool>(const char *, bool &, bool, bool);
 // Add more explicit instantiations if needed
+
+// --- ENCODER STATE MACHINE ---
+// Rotary encoder state table for quadrature decoding
+const unsigned char ttable[6][4] = {
+    {0x3, 0x2, 0x1, 0x0}, {0x23, 0x0, 0x1, 0x0}, {0x13, 0x2, 0x0, 0x0}, {0x3, 0x5, 0x4, 0x0}, {0x3, 0x3, 0x4, 0x10}, {0x3, 0x5, 0x3, 0x20}};
+volatile unsigned char state = 0;

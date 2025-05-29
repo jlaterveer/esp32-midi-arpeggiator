@@ -71,3 +71,10 @@ enum EncoderMode
     MODE_STRETCH,
     MODE_COUNT // Stretch pattern up/down by adding notes
 };
+
+// --- STRAIGHT/LOOP mode for pattern playback ---
+enum PatternPlaybackMode
+{
+    STRAIGHT,
+    LOOP
+};
