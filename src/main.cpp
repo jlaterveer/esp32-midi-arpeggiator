@@ -6,26 +6,18 @@
 #include "PatternGenerators.h"
 #include "Constants.h"
 #include "midiUtils.h"
+#include "ArpUtils.h"
 
 // EEPROM_SIZE is not used, but left for reference
 #define EEPROM_SIZE 4096 // Make sure this is large enough for all patterns
 
 // --- CONFIGURATION ---
-// Pin assignments for MIDI, LED, encoder, and buttons
-// (moved to Constants.h)
+// Pin assignments for MIDI, LED, encoder, and buttons moved to Constants.h
 
 // --- ENCODER STATE MACHINE ---
-// Rotary encoder state table for quadrature decoding
-const unsigned char ttable[6][4] = {
-    {0x3, 0x2, 0x1, 0x0}, {0x23, 0x0, 0x1, 0x0}, {0x13, 0x2, 0x0, 0x0}, {0x3, 0x5, 0x4, 0x0}, {0x3, 0x3, 0x4, 0x10}, {0x3, 0x5, 0x3, 0x20}};
-volatile unsigned char state = 0;
+// Rotary encoder state table for quadrature decoding moved to ArpUtils.cpp/.h
 
-// Initialize rotary encoder pins
-void rotary_init()
-{
-  pinMode(encoder0PinA, INPUT_PULLUP);
-  pinMode(encoder0PinB, INPUT_PULLUP);
-}
+
 
 // Process rotary encoder state and return direction
 unsigned char rotary_process()
@@ -50,19 +42,7 @@ EncoderMode encoderMode = MODE_BPM;
 
 const int encoderModeSize = MODE_COUNT; // Use enum count for size
 
-// --- STRAIGHT/LOOP mode for pattern playback ---
-enum PatternPlaybackMode
-{
-  STRAIGHT,
-  LOOP
-};
 PatternPlaybackMode patternPlaybackMode = LOOP;
-
-// --- REVERSE mode for pattern playback ---
-bool patternReverse = false;
-
-// --- SMOOTH mode for pattern playback ---
-bool patternSmooth = true;
 
 // --- PARAMETERS ---
 // (moved to Constants.h)
@@ -81,18 +61,43 @@ int noteBalancePercent = 0;          // Note bias percent
 int randomChordPercent = 0;          // Percentage of steps to replace with random 3-note chords
 int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
-//int notesPerBeatIndex = 4;           // 4 notes per beat
 int noteRepeat = 1;                  // Number of repeats per note
-bool modeBar1 = false;               // MODE_BAR1 ON/OFF state
+bool modeBar = false;                // MODE_BAR ON/OFF state
+bool patternReverse = false;         // REVERSE mode for pattern playback
+bool patternSmooth = true;           // SMOOTH mode for pattern playback
+
+// Debounce state for encoder switch
+static uint16_t encoderSWDebounce = 0; 
 
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
 int stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
 
-//int notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-
 int noteRepeatCounter = 0;
 unsigned long arpInterval = 60000 / (bpm * stepsPerBar); // ms per note
+
+// --- LED FLASH STATE ---
+unsigned long ledFlashStart = 0;            // When did LED flash start
+bool ledFlashing = false;                   // Is LED currently flashing
+const unsigned long ledFlashDuration = 100; // ms
+
+// --- Clear button handling ---
+void handleClearButton()
+{
+  static bool lastClear = HIGH;
+  bool currentClear = digitalRead(clearButtonPin);
+  // If clear button pressed, clear chord and reset state
+  if (lastClear == HIGH && currentClear == LOW)
+  {
+    currentChord.clear();
+    currentNoteIndex = 0;
+    noteRepeatCounter = 0;
+    neopixelWrite(ledBuiltIn, 0, 0, 64); // Blue LED flash
+    ledFlashStart = millis();
+    ledFlashing = true;
+  }
+  lastClear = currentClear;
+}
 
 // --- RANDOM CHORD FUNCTION ---
 // At random steps, replace the note with a 3-note chord (from playedChord, close together)
@@ -201,6 +206,7 @@ int selectedPatternIndex = 0;
 // stretchedChord: The chord after applying range stretch (used for final pattern generation).
 // playingChord: The final note sequence for the current arpeggio, after applying pattern, octave, reverse, smooth, bias, and range shift/stretch.
 // stepNotes: The notes (possibly chords) to be played at each arpeggiator step, after all processing.
+
 std::vector<uint8_t> currentChord; // Latched chord
 std::vector<uint8_t> tempChord;    // Chord being captured
 uint8_t leadNote = 0;              // First note of chord
@@ -210,10 +216,7 @@ bool noteOnActive = false;         // Is a note currently on?
 unsigned long noteOnStartTime = 0; // When was note on sent
 uint8_t lastPlayedNote = 0;        // Last note played
 
-// --- LED FLASH STATE ---
-unsigned long ledFlashStart = 0;            // When did LED flash start
-bool ledFlashing = false;                   // Is LED currently flashing
-const unsigned long ledFlashDuration = 100; // ms
+
 
 // --- MIDI I/O ---
 USBMIDI usbMIDI; // USB MIDI object
@@ -245,7 +248,7 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     selectedPatternIndex = constrain(map(value, 0, 127, 0, PAT_COUNT - 1), 0, PAT_COUNT - 1);
     break;
   case 6: // CC6 -> Pattern Playback Mode
-    patternPlaybackMode = (value < 64) ? STRAIGHT : LOOP;
+    patternPlaybackMode = (value >= 64) ? LOOP : STRAIGHT;
     break;
   case 7: // CC7 -> Pattern Reverse
     patternReverse = (value >= 64);
@@ -272,10 +275,6 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 14: // CC14 -> Note Balance
     noteBalancePercent = map(value, 0, 127, -100, 100);
     break;
-  //case 15: // CC15 -> Notes Per Beat (Resolution)
-  //  notesPerBeatIndex = constrain(map(value, 0, 127, 0, notesPerBeatOptionsSize - 1), 0, notesPerBeatOptionsSize - 1);
-  //  notesPerBeat = notesPerBeatOptions[notesPerBeatIndex];
-  //  break;
   case 16: // CC16 -> Random Chord Percent
     randomChordPercent = map(value, 0, 127, 0, 100);
     break;
@@ -350,30 +349,20 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   }
 }
 
-template <typename T>
-void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
-{
-  if (currentValue != lastValue)
-  {
-    Serial.print(label);
-    Serial.println(printValue);
-    lastValue = currentValue;
-  }
-}
 
-// --- Encoder switch shift-register debounce ---
-// Debounce state for encoder switch
-static uint16_t encoderSWDebounce = 0;
 
 // --- SETUP ---
 // Initialize all hardware and state
 void setup()
 {
+  // Initialize rotary encoder pins
+  pinMode(encoder0PinA, INPUT_PULLUP);
+  pinMode(encoder0PinB, INPUT_PULLUP);
+  pinMode(encoderSW, INPUT_PULLUP);
+
   pinMode(ledBuiltIn, OUTPUT);
   pinMode(clearButtonPin, INPUT_PULLUP);
-  pinMode(encoderSW, INPUT_PULLUP);
-  rotary_init();
-
+  
   Serial.begin(115200); // Debug
   unsigned long serialStart = millis();
   while (!Serial && millis() - serialStart < 3000)
@@ -383,7 +372,6 @@ void setup()
   Serial1.begin(31250, SERIAL_8N1, midiInRxPin, -1);  // MIDI IN
   Serial2.begin(31250, SERIAL_8N1, -1, midiOutTxPin); // MIDI OUT
 
-  // USBDevice.setProductDescriptor("MyMIDIController"); // Removed: USBDevice is undefined on ESP32/Arduino
   USB.begin();
   usbMIDI.begin();
 
@@ -399,6 +387,12 @@ void setup()
   handleNoteOn(65);
   handleNoteOn(67);
   handleNoteOff(55);
+
+  // Initialize stepsPerBar and arpInterval
+  stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
+  unsigned long barLengthMs = 60000 / bpm * 4;
+  unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+  arpInterval = noteLengthMs;
 }
 
 // --- LOOP ---
@@ -407,6 +401,10 @@ void loop()
 {
   unsigned long now = millis();
 
+  // --- Clear button handling ---
+  handleClearButton();
+
+  /*
   // --- Clear button handling ---
   static bool lastClear = HIGH;
   bool currentClear = digitalRead(clearButtonPin);
@@ -421,6 +419,7 @@ void loop()
     ledFlashing = true;
   }
   lastClear = currentClear;
+  */
 
   // --- Encoder switch shift-register debounce ---
   encoderSWDebounce = (encoderSWDebounce << 1) | !digitalRead(encoderSW);
@@ -546,12 +545,12 @@ void loop()
     case MODE_REVERSE:
       patternReverse = !patternReverse;
       Serial.print("Pattern Reverse: ");
-      Serial.println(patternReverse ? "ON" : "OFF");
+      Serial.println(patternReverse ? "REVERSE" : "NORMAL");
       break;
     case MODE_SMOOTH:
       patternSmooth = !patternSmooth;
       Serial.print("Pattern Smooth: ");
-      Serial.println(patternSmooth ? "ON" : "OFF");
+      Serial.println(patternSmooth ? "SMOOTH" : "NORMAL");
       break;
     case MODE_RANDOM_CHORD:
       randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
@@ -571,19 +570,10 @@ void loop()
       stepsPerBarIndex = constrain(stepsPerBarIndex + delta, 0, stepsPerBarOptionsSize - 1);
       stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
       break;
-    case MODE_BAR1:
-      modeBar1 = !modeBar1;
-      Serial.print("MODE_BAR1: ");
-      Serial.print(modeBar1 ? "ON" : "OFF");
-      // Serial debug output
-      Serial.print("adj playingChord: ");
-      for (size_t i = 0; i < playingChord.size(); ++i)
-      {
-        Serial.print((int)playingChord[i]);
-        if (i < playingChord.size() - 1)
-          Serial.print(", ");
-      }
-      Serial.println();
+    case MODE_BAR:
+      modeBar = !modeBar;
+      Serial.print("MODE_BAR: ");
+      Serial.println(modeBar ? "FIT" : "NORMAL");
       break;
     }
     // Update arpInterval to reflect the note length for a 4/4 bar
@@ -598,37 +588,6 @@ void loop()
 
   // --- MIDI IN (USB) ---
   processUsbMidiPackets(usbMIDI);
-
-  /*
-  midiEventPacket_t packet;
-  while (usbMIDI.readPacket(&packet))
-  {
-    uint8_t cin = packet.header & 0x0F;
-    if (packet.byte1 == 0xF8)
-    {
-      handleMidiClock();
-      continue;
-    }
-    switch (cin)
-    {
-    case 0x09: // Note On
-      if (packet.byte3 > 0)
-        handleNoteOn(packet.byte2);
-      else
-        handleNoteOff(packet.byte2);
-      break;
-    case 0x08: // Note Off
-      handleNoteOff(packet.byte2);
-      break;
-    case 0x0B: // Control Change (CC)
-      handleMidiCC(packet.byte2, packet.byte3);
-      break;
-    default:
-      // No action for other CIN values
-      break;
-    }
-  }
-  */
 
   // --- Chord processing ---
   // baseChord: The chord as currently being played or captured (raw input, possibly with duplicates, order preserved).
@@ -758,25 +717,25 @@ void loop()
   std::vector<uint8_t> playingChord;
   if (patternSmooth && octaveRange != 0 && !patternIndicesFinal.empty())
   {
-    int octStart, octEnd, octStep;
+    int octStart, octEnd;
+    int octStep = 1; // Set octStep outside the if-else block
+
     if (octaveRange > 0)
     {
       octStart = 0;
       octEnd = octaveRange;
-      octStep = 1;
     }
     else if (octaveRange < 0)
     {
       octStart = octaveRange;
       octEnd = 0;
-      octStep = 1;
     }
     else
     {
       octStart = 0;
       octEnd = 0;
-      octStep = 1;
     }
+
     int prevNote = -1;
     bool first = true;
     for (int oct = octStart; (octStep > 0) ? (oct <= octEnd) : (oct >= octEnd); oct += octStep)
@@ -831,8 +790,8 @@ void loop()
   // --- Apply note bias based on noteBalancePercent ---
   applyNoteBiasToChord(playingChord, noteBalancePercent);
 
-  // --- Apply MODE_BAR1 functionality ---
-  if (modeBar1)
+  // --- Apply MODE_BAR functionality ---
+  if (modeBar)
   {
     std::vector<uint8_t> adjustedPlayingChord;
     size_t steps = stepsPerBar;
@@ -879,10 +838,10 @@ void loop()
     notesOn = stepNotes[noteIndex].notes;
 
     // Print step and note information
-    Serial.print("step-note: ");
-    Serial.print(currentNoteIndex + 1); // Step number (1-based index)
-    Serial.print("-");
-    Serial.println(noteIndex + 1); // Note number (1-based index)
+    // Serial.print("step-note: ");
+    // Serial.print(currentNoteIndex + 1); // Step number (1-based index)
+    // Serial.print("-");
+    // Serial.println(noteIndex + 1); // Note number (1-based index)
 
     // --- Rhythm velocity calculation using pattern generator ---
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
@@ -890,8 +849,15 @@ void loop()
     float rhythmMult = 1.0f;
     if (!rhythmPatternIndices.empty())
     {
-      uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
-      uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      std::vector<uint8_t> sortrhythmPatternIndices = rhythmPatternIndices;
+      std::sort(sortrhythmPatternIndices.begin(), sortrhythmPatternIndices.end());
+      // uint8_t targetNote = (percent < 0) ? sortChord.front() : sortChord.back();
+
+      uint8_t minIdx = sortrhythmPatternIndices.front();
+      uint8_t maxIdx = sortrhythmPatternIndices.back();
+
+      // uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      // uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
       uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
       if (maxIdx > minIdx)
       {
@@ -979,33 +945,8 @@ void loop()
   printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch, noteRangeStretch);
   printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
 
-  //stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-  //Serial.print("Steps (4/4 bar): ");
-  //Serial.println(stepsPerBar);
-
   if (encoderMode != lastMode)
   {
-    static const char *modeNames[] = {
-        "BPM",
-        "Note Length %",
-        "Velocity",
-        "Octave Range",
-        "Pattern",
-        "Pattern Playback Mode",
-        "Pattern Reverse",
-        "Pattern Smooth",
-        "Steps (4/4 bar)",
-        "Bar1 Mode", // Added MODE_BAR1 to the mode names
-        "Note Repeat",
-        "Transpose",
-        "Velocity Dynamics Percent",
-        "Timing Humanize Percent",
-        "Note Length Randomize Percent",
-        "Note Balance Percent",
-        "Random Chord Percent",
-        "Rhythm Pattern",
-        "Range Shift",
-        "Range Stretch"};
     Serial.print("Encoder Mode: ");
     if (encoderMode >= 0 && encoderMode < (int)(sizeof(modeNames) / sizeof(modeNames[0])))
       Serial.println(modeNames[encoderMode]);
