@@ -1,4 +1,5 @@
 #include "ArpUtils.h"
+#include <Arduino.h>
 
 const char *modeNames[] = {
     "BPM",
@@ -21,3 +22,19 @@ const char *modeNames[] = {
     "Rhythm Pattern",
     "Range Shift",
     "Range Stretch"};
+
+template <typename T>
+void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
+{
+    if (currentValue != lastValue)
+    {
+        Serial.print(label);
+        Serial.println(printValue);
+        lastValue = currentValue;
+    }
+}
+
+// Explicit template instantiations for common types
+template void printIfChanged<int>(const char *, int &, int, int);
+template void printIfChanged<bool>(const char *, bool &, bool, bool);
+// Add more explicit instantiations if needed

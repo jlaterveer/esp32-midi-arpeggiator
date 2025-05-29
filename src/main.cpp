@@ -345,6 +345,7 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   }
 }
 
+/*
 template <typename T>
 void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
 {
@@ -354,7 +355,7 @@ void printIfChanged(const char *label, T &lastValue, T currentValue, T printValu
     Serial.println(printValue);
     lastValue = currentValue;
   }
-}
+}*/
 
 // --- Encoder switch shift-register debounce ---
 // Debounce state for encoder switch
@@ -839,10 +840,10 @@ void loop()
     notesOn = stepNotes[noteIndex].notes;
 
     // Print step and note information
-    //Serial.print("step-note: ");
-    //Serial.print(currentNoteIndex + 1); // Step number (1-based index)
-    //Serial.print("-");
-    //Serial.println(noteIndex + 1); // Note number (1-based index)
+    // Serial.print("step-note: ");
+    // Serial.print(currentNoteIndex + 1); // Step number (1-based index)
+    // Serial.print("-");
+    // Serial.println(noteIndex + 1); // Note number (1-based index)
 
     // --- Rhythm velocity calculation using pattern generator ---
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
@@ -852,13 +853,13 @@ void loop()
     {
       std::vector<uint8_t> sortrhythmPatternIndices = rhythmPatternIndices;
       std::sort(sortrhythmPatternIndices.begin(), sortrhythmPatternIndices.end());
-      //uint8_t targetNote = (percent < 0) ? sortChord.front() : sortChord.back();
+      // uint8_t targetNote = (percent < 0) ? sortChord.front() : sortChord.back();
 
       uint8_t minIdx = sortrhythmPatternIndices.front();
       uint8_t maxIdx = sortrhythmPatternIndices.back();
 
-      //uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
-      //uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      // uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
+      // uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
       uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
       if (maxIdx > minIdx)
       {
@@ -947,7 +948,7 @@ void loop()
   printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
 
   if (encoderMode != lastMode)
-  { 
+  {
     Serial.print("Encoder Mode: ");
     if (encoderMode >= 0 && encoderMode < (int)(sizeof(modeNames) / sizeof(modeNames[0])))
       Serial.println(modeNames[encoderMode]);
