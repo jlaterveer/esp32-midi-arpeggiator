@@ -69,7 +69,30 @@ int barDenominatorIndex = 3;
 // Debounce state for encoder switch
 static uint16_t encoderSWDebounce = 0;
 
-unsigned long calculateBarLength(int bpm, int numerator, int denominator)
+enum MeterType
+{
+  SIMPLE_METER,
+  COMPOUND_METER,
+  IRREGULAR_METER
+};
+
+MeterType getMeterType(int numerator, int denominator)
+{
+
+  if (numerator == 2 || numerator == 3 || numerator == 4) {
+    return SIMPLE_METER;
+  }
+  if (numerator % 3 == 0 && numerator > 3) {
+    return COMPOUND_METER;
+  }
+  return IRREGULAR_METER;
+}
+
+MeterType meterType = COMPOUND_METER;
+
+// Calculate the bar length in ms
+//unsigned long calculateBarLength(int bpm, int numerator, int denominator)
+unsigned long calculateBarLength(int bpm, MeterType type, int numerator, int denominator)
 {
   float beatLengthMs = 0;
 
@@ -79,23 +102,32 @@ unsigned long calculateBarLength(int bpm, int numerator, int denominator)
 
   // Simple meter: beat = denominator note
   // Compound meter: beat = dotted note (3 sub-notes per beat)
-  if (numerator % 3 == 0 && numerator > 3)
+  // Irregular meter: beat = denominator note
+  float noteFactor = 0; // Initialize noteFactor for use in all cases
+  int compoundBeats = 0;
+  switch (type) // Simple meter
   {
-    // Compound meter
-    int compoundBeats = numerator / 3;
-    // Convert dotted note to fraction of quarter note
-    float dottedNoteFactor = 4.0 / denominator * 3; // e.g. 8 -> 1.5, 16 -> 0.75
-    beatLengthMs = quarterNoteMs * dottedNoteFactor;
-    return compoundBeats * beatLengthMs;
-  }
-  else
-  {
-    // Simple meter
-    float noteFactor = 4.0 / denominator; // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
+  case SIMPLE_METER:                      // Simple meter
+    noteFactor = 4.0 / denominator;       // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
     beatLengthMs = quarterNoteMs * noteFactor;
     return numerator * beatLengthMs;
+    break;
+  case COMPOUND_METER: // Compound meter
+    compoundBeats = numerator / 3;
+    // Convert dotted note to fraction of quarter note
+    noteFactor = 4.0 / denominator * 3; // e.g. 8 -> 1.5, 16 -> 0.75
+    beatLengthMs = quarterNoteMs * noteFactor;
+    return compoundBeats * beatLengthMs;
+    break;
+  case IRREGULAR_METER: // Irregular meter
+    noteFactor = 4.0 / denominator;       // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
+    beatLengthMs = quarterNoteMs * noteFactor;
+    return numerator * beatLengthMs;
+    break;
   }
+  return 0; // Default return to handle unexpected cases
 }
+  
 
 // Steps per bar (for 4/4 bar), default index 7 = 8 steps
 int stepsPerBarIndex = 7;
@@ -136,7 +168,7 @@ struct StepNotes
 };
 
 void buildRandomChordSteps(
-    std::vector<StepNotes> &stepNotes,
+    std::vector<StepNotes> & stepNotes,
     const std::vector<uint8_t> &playingChord,
     const std::vector<uint8_t> &playedChord,
     int percent)
@@ -319,7 +351,7 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     break;
   }
   // Update arpInterval to reflect the note length for a 4/4 bar
-  unsigned long barLengthMs = calculateBarLength(bpm, 6, 8);
+  unsigned long barLengthMs = calculateBarLength(bpm, meterType, 6, 8);
   // unsigned long barLengthMs = 60000 / bpm * 4;
   unsigned long noteLengthMs = barLengthMs / stepsPerBar;
   arpInterval = noteLengthMs;
@@ -351,7 +383,7 @@ unsigned long getRandomizedNoteLength(unsigned long noteLengthMs)
 // --- NOTE BIAS FUNCTION ---
 // Applies note bias to a chord vector based on percentage.
 // Negative: replace notes with lowest note, Positive: with highest note.
-void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
+void applyNoteBiasToChord(std::vector<uint8_t> & chord, int percent)
 {
   if (chord.empty() || percent == 0)
     return;
@@ -420,8 +452,15 @@ void setup()
   int barNumerator = 6;
   int barDenominatorIndex = 3; // 8
 
+  meterType = getMeterType(barNumerator, barDenominatorOptions[barDenominatorIndex]);
+  Serial.print(barNumerator);
+  Serial.print("/");
+  Serial.print(barDenominatorOptions[barDenominatorIndex]);
+  Serial.print(" is: ");
+  Serial.println(meterType);
+
   // Use selected numerator/denominator for bar length
-  unsigned long barLengthMs = calculateBarLength(bpm, barNumerator, barDenominatorOptions[barDenominatorIndex]);
+  unsigned long barLengthMs = calculateBarLength(bpm, meterType, barNumerator, barDenominatorOptions[barDenominatorIndex]);
   Serial.println(barLengthMs); // Should print 1000
 
   // unsigned long barLengthMs = 60000 / bpm * 4;
@@ -613,15 +652,17 @@ void loop()
       barNumerator = constrain(barNumerator + delta, 1, 64);
       Serial.print("Bar Numerator: ");
       Serial.println(barNumerator);
+      meterType = getMeterType(barNumerator, barDenominatorOptions[barDenominatorIndex]);
       break;
     case MODE_BAR_DENOMINATOR:
       barDenominatorIndex = constrain(barDenominatorIndex + delta, 0, barDenominatorOptionsSize - 1);
       Serial.print("Bar Denominator: ");
       Serial.println(barDenominatorOptions[barDenominatorIndex]);
+      meterType = getMeterType(barNumerator, barDenominatorOptions[barDenominatorIndex]);
       break;
     }
     // Update arpInterval to reflect the note length for the selected bar
-    unsigned long barLengthMs = calculateBarLength(bpm, barNumerator, barDenominatorOptions[barDenominatorIndex]);
+    unsigned long barLengthMs = calculateBarLength(bpm, meterType, barNumerator, barDenominatorOptions[barDenominatorIndex]);
     unsigned long noteLengthMs = barLengthMs / stepsPerBar;
     arpInterval = noteLengthMs;
 
