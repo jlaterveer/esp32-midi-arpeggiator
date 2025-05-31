@@ -17,8 +17,6 @@
 // --- ENCODER STATE MACHINE ---
 // Rotary encoder state table for quadrature decoding moved to ArpUtils.cpp/.h
 
-
-
 // Process rotary encoder state and return direction
 unsigned char rotary_process()
 {
@@ -128,8 +126,6 @@ void handleClearButton()
   }
   lastClear = currentClear;
 }
-
-
 
 // --- RANDOM CHORD FUNCTION ---
 // At random steps, replace the note with a 3-note chord (from playedChord, close together)
@@ -248,8 +244,6 @@ bool noteOnActive = false;         // Is a note currently on?
 unsigned long noteOnStartTime = 0; // When was note on sent
 uint8_t lastPlayedNote = 0;        // Last note played
 
-
-
 // --- MIDI I/O ---
 USBMIDI usbMIDI; // USB MIDI object
 
@@ -326,7 +320,7 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   }
   // Update arpInterval to reflect the note length for a 4/4 bar
   unsigned long barLengthMs = calculateBarLength(bpm, 6, 8);
-  //unsigned long barLengthMs = 60000 / bpm * 4;
+  // unsigned long barLengthMs = 60000 / bpm * 4;
   unsigned long noteLengthMs = barLengthMs / stepsPerBar;
   arpInterval = noteLengthMs;
 }
@@ -382,8 +376,6 @@ void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
   }
 }
 
-
-
 // --- SETUP ---
 // Initialize all hardware and state
 void setup()
@@ -395,7 +387,7 @@ void setup()
 
   pinMode(ledBuiltIn, OUTPUT);
   pinMode(clearButtonPin, INPUT_PULLUP);
-  
+
   Serial.begin(115200); // Debug
   unsigned long serialStart = millis();
   while (!Serial && millis() - serialStart < 3000)
@@ -430,9 +422,9 @@ void setup()
 
   // Use selected numerator/denominator for bar length
   unsigned long barLengthMs = calculateBarLength(bpm, barNumerator, barDenominatorOptions[barDenominatorIndex]);
-  Serial.println(barLengthMs);                               // Should print 1000
+  Serial.println(barLengthMs); // Should print 1000
 
-  //unsigned long barLengthMs = 60000 / bpm * 4;
+  // unsigned long barLengthMs = 60000 / bpm * 4;
   unsigned long noteLengthMs = barLengthMs / stepsPerBar;
   arpInterval = noteLengthMs;
 }
@@ -632,6 +624,15 @@ void loop()
     unsigned long barLengthMs = calculateBarLength(bpm, barNumerator, barDenominatorOptions[barDenominatorIndex]);
     unsigned long noteLengthMs = barLengthMs / stepsPerBar;
     arpInterval = noteLengthMs;
+
+    // Print barLengthMs and noteLengthMs when numerator, denominator, or steps change
+    if (encoderMode == MODE_BAR_NUMERATOR || encoderMode == MODE_BAR_DENOMINATOR || encoderMode == MODE_STEPS)
+    {
+      Serial.print("barLengthMs: ");
+      Serial.print(barLengthMs);
+      Serial.print(", noteLengthMs: ");
+      Serial.println(noteLengthMs);
+    }
   }
 
   // --- MIDI IN (hardware) ---
