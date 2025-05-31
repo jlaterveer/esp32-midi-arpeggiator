@@ -65,11 +65,13 @@ int noteRepeat = 1;                  // Number of repeats per note
 bool modeBar = false;                // MODE_BAR ON/OFF state
 bool patternReverse = false;         // REVERSE mode for pattern playback
 bool patternSmooth = true;           // SMOOTH mode for pattern playback
+int barNumerator = 4;
+int barDenominatorIndex = 3;
 
 // Debounce state for encoder switch
 static uint16_t encoderSWDebounce = 0;
 
-unsigned long calculateBarLength(int bpm, int top, int bottom)
+unsigned long calculateBarLength(int bpm, int numerator, int denominator)
 {
   float beatLengthMs = 0;
 
@@ -79,21 +81,21 @@ unsigned long calculateBarLength(int bpm, int top, int bottom)
 
   // Simple meter: beat = denominator note
   // Compound meter: beat = dotted note (3 sub-notes per beat)
-  if (top % 3 == 0 && top > 3)
+  if (numerator % 3 == 0 && numerator > 3)
   {
     // Compound meter
-    int compoundBeats = top / 3;
+    int compoundBeats = numerator / 3;
     // Convert dotted note to fraction of quarter note
-    float dottedNoteFactor = 4.0 / bottom * 3; // e.g. 8 -> 1.5, 16 -> 0.75
+    float dottedNoteFactor = 4.0 / denominator * 3; // e.g. 8 -> 1.5, 16 -> 0.75
     beatLengthMs = quarterNoteMs * dottedNoteFactor;
     return compoundBeats * beatLengthMs;
   }
   else
   {
     // Simple meter
-    float noteFactor = 4.0 / bottom; // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
+    float noteFactor = 4.0 / denominator; // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
     beatLengthMs = quarterNoteMs * noteFactor;
-    return top * beatLengthMs;
+    return numerator * beatLengthMs;
   }
 }
 
@@ -422,7 +424,12 @@ void setup()
   // Initialize stepsPerBar and arpInterval
   stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
 
-  unsigned long barLengthMs = calculateBarLength(bpm, 6, 8); // 6/8 at 120 BPM
+  // Set default barNumerator and barDenominatorIndex
+  int barNumerator = 6;
+  int barDenominatorIndex = 3; // 8
+
+  // Use selected numerator/denominator for bar length
+  unsigned long barLengthMs = calculateBarLength(bpm, barNumerator, barDenominatorOptions[barDenominatorIndex]);
   Serial.println(barLengthMs);                               // Should print 1000
 
   //unsigned long barLengthMs = 60000 / bpm * 4;
@@ -465,7 +472,7 @@ void loop()
   if (swDebounced && !swHandled)
   {
     encoderMode = static_cast<EncoderMode>((encoderMode + 1) % encoderModeSize);
-    neopixelWrite(ledBuiltIn, 0, 0, 127);
+    neopixelWrite(ledBuiltIn, 0, 0, 16);
     ledFlashStart = millis();
     ledFlashing = true;
     swHandled = true;
@@ -610,10 +617,19 @@ void loop()
       Serial.print("MODE_BAR: ");
       Serial.println(modeBar ? "FIT" : "NORMAL");
       break;
+    case MODE_BAR_NUMERATOR:
+      barNumerator = constrain(barNumerator + delta, 1, 64);
+      Serial.print("Bar Numerator: ");
+      Serial.println(barNumerator);
+      break;
+    case MODE_BAR_DENOMINATOR:
+      barDenominatorIndex = constrain(barDenominatorIndex + delta, 0, barDenominatorOptionsSize - 1);
+      Serial.print("Bar Denominator: ");
+      Serial.println(barDenominatorOptions[barDenominatorIndex]);
+      break;
     }
-    // Update arpInterval to reflect the note length for a 4/4 bar
-    //unsigned long barLengthMs = 60000 / bpm * 4;
-    unsigned long barLengthMs = calculateBarLength(bpm, 6, 8);
+    // Update arpInterval to reflect the note length for the selected bar
+    unsigned long barLengthMs = calculateBarLength(bpm, barNumerator, barDenominatorOptions[barDenominatorIndex]);
     unsigned long noteLengthMs = barLengthMs / stepsPerBar;
     arpInterval = noteLengthMs;
   }
@@ -964,6 +980,8 @@ void loop()
   static int lastNoteRangeShift = noteRangeShift;
   static int lastNoteRangeStretch = noteRangeStretch;
   static int lastStepsPerBarIndex = stepsPerBarIndex;
+  static int lastBarNumerator = barNumerator;
+  static int lastBarDenominatorIndex = barDenominatorIndex;
 
   printIfChanged("BPM: ", lastBPM, bpm, bpm);
   printIfChanged("Note Length %: ", lastLength, noteLengthPercent, noteLengthPercent);
@@ -980,6 +998,8 @@ void loop()
   printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift, noteRangeShift);
   printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch, noteRangeStretch);
   printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
+  printIfChanged("Bar Numerator: ", lastBarNumerator, barNumerator, barNumerator);
+  printIfChanged("Bar Denominator: ", lastBarDenominatorIndex, barDenominatorIndex, barDenominatorOptions[barDenominatorIndex]);
 
   if (encoderMode != lastMode)
   {

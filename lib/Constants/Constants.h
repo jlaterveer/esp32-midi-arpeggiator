@@ -31,6 +31,10 @@ const int maxTranspose = 3;
 const int stepsPerBarOptions[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16, 24, 32};
 const int stepsPerBarOptionsSize = sizeof(stepsPerBarOptions) / sizeof(stepsPerBarOptions[0]);
 
+// Steps per bar options for a 4-beat bar
+const int barDenominatorOptions[] = {1, 2, 4, 8, 16, 32,64};
+const int barDenominatorOptionsSize = sizeof(barDenominatorOptions) / sizeof(barDenominatorOptions[0]);
+
 // extern variables
 extern int bpm;
 extern unsigned long arpInterval;
@@ -58,7 +62,9 @@ enum EncoderMode
     MODE_REVERSE,
     MODE_SMOOTH, // Pattern smooth mode
     MODE_STEPS,  // Number of steps in a 4-beat bar
-    MODE_BAR,   // Limit or repeat playingChord to match steps
+    MODE_BAR,    // Limit or repeat playingChord to match steps
+    MODE_BAR_NUMERATOR,
+    MODE_BAR_DENOMINATOR,
     MODE_REPEAT,
     MODE_TRANSPOSE,
     MODE_DYNAMICS,

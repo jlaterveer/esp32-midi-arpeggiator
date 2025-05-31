@@ -12,6 +12,8 @@ const char *modeNames[] = {
     "Pattern Smooth",
     "Steps (4/4 bar)",
     "Bar Mode",
+    "Numerator",
+    "Denominator",
     "Note Repeat",
     "Transpose",
     "Velocity Dynamics Percent",
