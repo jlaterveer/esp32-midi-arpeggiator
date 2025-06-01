@@ -62,7 +62,6 @@ enum EncoderMode
     MODE_PATTERN_PLAYBACK,
     MODE_REVERSE,
     MODE_SMOOTH, // Pattern smooth mode
-    //MODE_STEPS,  // Number of steps in a 4-beat bar
     MODE_BAR,    // Limit or repeat playingChord to match steps
     MODE_BAR_NUMERATOR,
     MODE_BAR_DENOMINATOR,

@@ -346,9 +346,7 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   }
   // Update arpInterval to reflect the note length for a bar
   unsigned long barLengthMs = calculateBarLength(bpm, meterType, 6, 8);
-  // unsigned long barLengthMs = 60000 / bpm * 4;
-  // Step length is barLengthMs / numerator
-  // unsigned long noteLengthMs = barLengthMs / barNumerator;
+  
   noteLengthMs = barLengthMs / barNumerator;
   arpInterval = noteLengthMs;
 }
@@ -453,23 +451,6 @@ void loop()
 
   // --- Clear button handling ---
   handleClearButton();
-
-  /*
-  // --- Clear button handling ---
-  static bool lastClear = HIGH;
-  bool currentClear = digitalRead(clearButtonPin);
-  // If clear button pressed, clear chord and reset state
-  if (lastClear == HIGH && currentClear == LOW)
-  {
-    currentChord.clear();
-    currentNoteIndex = 0;
-    noteRepeatCounter = 0;
-    neopixelWrite(ledBuiltIn, 0, 0, 64); // Blue LED flash
-    ledFlashStart = millis();
-    ledFlashing = true;
-  }
-  lastClear = currentClear;
-  */
 
   // --- Encoder switch shift-register debounce ---
   encoderSWDebounce = (encoderSWDebounce << 1) | !digitalRead(encoderSW);
@@ -589,8 +570,8 @@ void loop()
       break;
     case MODE_PATTERN_PLAYBACK:
       patternPlaybackMode = (patternPlaybackMode == STRAIGHT) ? LOOP : STRAIGHT;
-      Serial.print("Pattern Playback Mode: ");
-      Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
+      Serial.print("Pattern Loop: ");
+      Serial.println(patternPlaybackMode == STRAIGHT ? "NO" : "YES");
       break;
     case MODE_REVERSE:
       patternReverse = !patternReverse;
@@ -618,26 +599,38 @@ void loop()
       break;
     case MODE_BAR:
       modeBar = !modeBar;
-      Serial.print("MODE_BAR: ");
-      Serial.println(modeBar ? "FIT" : "NORMAL");
+      Serial.print("Bar mode: ");
+      Serial.println(modeBar ? "FIT" : "ROLLOVER");
       break;
     case MODE_BAR_NUMERATOR:
       barNumerator = constrain(barNumerator + delta, 1, 64);
-      Serial.print("Bar Numerator: ");
-      Serial.println(barNumerator);
       meterType = getMeterType(barNumerator, barDenominatorOptions[barDenominatorIndex]);
+      Serial.print("meter: ");
+      Serial.print(barNumerator);
+      Serial.print("/");
+      Serial.print(barDenominatorOptions[barDenominatorIndex]);
+      Serial.print(" [");
+      Serial.print(meterTypes[meterType]);
+      Serial.println("]");
       break;
     case MODE_BAR_DENOMINATOR:
       barDenominatorIndex = constrain(barDenominatorIndex + delta, 0, barDenominatorOptionsSize - 1);
-      Serial.print("Bar Denominator: ");
-      Serial.println(barDenominatorOptions[barDenominatorIndex]);
       meterType = getMeterType(barNumerator, barDenominatorOptions[barDenominatorIndex]);
+      meterType = getMeterType(barNumerator, barDenominatorOptions[barDenominatorIndex]);
+      Serial.print("meter: ");
+      Serial.print(barNumerator);
+      Serial.print("/");
+      Serial.print(barDenominatorOptions[barDenominatorIndex]);
+      Serial.print(" [");
+      Serial.print(meterTypes[meterType]);
+      Serial.println("]");
       break;
     }
+
     // Update arpInterval to reflect the note length for the selected bar
     unsigned long barLengthMs = calculateBarLength(bpm, meterType, barNumerator, barDenominatorOptions[barDenominatorIndex]);
+    
     // Step length is barLengthMs / numerator
-    // unsigned long noteLengthMs = barLengthMs / barNumerator;
     noteLengthMs = barLengthMs / barNumerator;
     arpInterval = noteLengthMs;
 
@@ -906,12 +899,6 @@ void loop()
     size_t noteIndex = currentNoteIndex % chordSize;
     notesOn = stepNotes[noteIndex].notes;
 
-    // Print step and note information
-    // Serial.print("step-note: ");
-    // Serial.print(currentNoteIndex + 1); // Step number (1-based index)
-    // Serial.print("-");
-    // Serial.println(noteIndex + 1); // Note number (1-based index)
-
     // --- Rhythm velocity calculation using pattern generator ---
     std::vector<uint8_t> rhythmPatternIndices = customPatternFuncs[selectedRhythmPattern](chordSize);
     // Invert mapping: 0 is loudest (1.0), max is softest (0.1)
@@ -920,13 +907,10 @@ void loop()
     {
       std::vector<uint8_t> sortrhythmPatternIndices = rhythmPatternIndices;
       std::sort(sortrhythmPatternIndices.begin(), sortrhythmPatternIndices.end());
-      // uint8_t targetNote = (percent < 0) ? sortChord.front() : sortChord.back();
 
       uint8_t minIdx = sortrhythmPatternIndices.front();
       uint8_t maxIdx = sortrhythmPatternIndices.back();
 
-      // uint8_t minIdx = *std::min_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
-      // uint8_t maxIdx = *std::max_element(rhythmPatternIndices.begin(), rhythmPatternIndices.end());
       uint8_t idx = rhythmPatternIndices[noteIndex % rhythmPatternIndices.size()];
       if (maxIdx > minIdx)
       {

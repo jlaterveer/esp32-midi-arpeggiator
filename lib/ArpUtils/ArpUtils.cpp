@@ -10,7 +10,6 @@ const char *modeNames[] = {
     "Pattern Playback Mode",
     "Pattern Reverse",
     "Pattern Smooth",
-    //"Steps (4/4 bar)",
     "Bar Mode",
     "Numerator",
     "Denominator",
@@ -24,6 +23,12 @@ const char *modeNames[] = {
     "Rhythm Pattern",
     "Range Shift",
     "Range Stretch"};
+
+// Helper to convert MeterType enum to a human-readable string
+const char *meterTypes[] = {
+    "Simple Meter",
+    "Compound Meter",
+    "Irregular Meter"};
 
 template <typename T>
 void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
