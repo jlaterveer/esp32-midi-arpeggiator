@@ -65,6 +65,7 @@ bool patternReverse = false;         // REVERSE mode for pattern playback
 bool patternSmooth = true;           // SMOOTH mode for pattern playback
 int barNumerator = 4;
 int barDenominatorIndex = 3;
+unsigned long noteLengthMs = 0;
 
 // Debounce state for encoder switch
 static uint16_t encoderSWDebounce = 0;
@@ -79,10 +80,12 @@ enum MeterType
 MeterType getMeterType(int numerator, int denominator)
 {
 
-  if (numerator == 2 || numerator == 3 || numerator == 4) {
+  if (numerator == 2 || numerator == 3 || numerator == 4)
+  {
     return SIMPLE_METER;
   }
-  if (numerator % 3 == 0 && numerator > 3) {
+  if (numerator % 3 == 0 && numerator > 3)
+  {
     return COMPOUND_METER;
   }
   return IRREGULAR_METER;
@@ -91,7 +94,7 @@ MeterType getMeterType(int numerator, int denominator)
 MeterType meterType = COMPOUND_METER;
 
 // Calculate the bar length in ms
-//unsigned long calculateBarLength(int bpm, int numerator, int denominator)
+// unsigned long calculateBarLength(int bpm, int numerator, int denominator)
 unsigned long calculateBarLength(int bpm, MeterType type, int numerator, int denominator)
 {
   float beatLengthMs = 0;
@@ -107,8 +110,8 @@ unsigned long calculateBarLength(int bpm, MeterType type, int numerator, int den
   int compoundBeats = 0;
   switch (type) // Simple meter
   {
-  case SIMPLE_METER:                      // Simple meter
-    noteFactor = 4.0 / denominator;       // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
+  case SIMPLE_METER:                // Simple meter
+    noteFactor = 4.0 / denominator; // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
     beatLengthMs = quarterNoteMs * noteFactor;
     return numerator * beatLengthMs;
     break;
@@ -119,22 +122,17 @@ unsigned long calculateBarLength(int bpm, MeterType type, int numerator, int den
     beatLengthMs = quarterNoteMs * noteFactor;
     return compoundBeats * beatLengthMs;
     break;
-  case IRREGULAR_METER: // Irregular meter
-    noteFactor = 4.0 / denominator;       // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
+  case IRREGULAR_METER:             // Irregular meter
+    noteFactor = 4.0 / denominator; // e.g. 4 -> 1, 2 -> 2, 8 -> 0.5
     beatLengthMs = quarterNoteMs * noteFactor;
     return numerator * beatLengthMs;
     break;
   }
   return 0; // Default return to handle unexpected cases
 }
-  
-
-// Steps per bar (for 4/4 bar), default index 7 = 8 steps
-int stepsPerBarIndex = 7;
-int stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
 
 int noteRepeatCounter = 0;
-unsigned long arpInterval = 60000 / (bpm * stepsPerBar); // ms per note
+unsigned long arpInterval = 0; // ms per note, will be set in setup()
 
 // --- LED FLASH STATE ---
 unsigned long ledFlashStart = 0;            // When did LED flash start
@@ -168,7 +166,7 @@ struct StepNotes
 };
 
 void buildRandomChordSteps(
-    std::vector<StepNotes> & stepNotes,
+    std::vector<StepNotes> &stepNotes,
     const std::vector<uint8_t> &playingChord,
     const std::vector<uint8_t> &playedChord,
     int percent)
@@ -345,15 +343,13 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   case 19: // CC19 -> Range Stretch
     noteRangeStretch = map(value, 0, 127, -24, 24);
     break;
-  case 20: // CC20 -> Steps (4/4 bar)
-    stepsPerBarIndex = constrain(map(value, 0, 127, 0, stepsPerBarOptionsSize - 1), 0, stepsPerBarOptionsSize - 1);
-    stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-    break;
   }
-  // Update arpInterval to reflect the note length for a 4/4 bar
+  // Update arpInterval to reflect the note length for a bar
   unsigned long barLengthMs = calculateBarLength(bpm, meterType, 6, 8);
   // unsigned long barLengthMs = 60000 / bpm * 4;
-  unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+  // Step length is barLengthMs / numerator
+  // unsigned long noteLengthMs = barLengthMs / barNumerator;
+  noteLengthMs = barLengthMs / barNumerator;
   arpInterval = noteLengthMs;
 }
 
@@ -383,7 +379,7 @@ unsigned long getRandomizedNoteLength(unsigned long noteLengthMs)
 // --- NOTE BIAS FUNCTION ---
 // Applies note bias to a chord vector based on percentage.
 // Negative: replace notes with lowest note, Positive: with highest note.
-void applyNoteBiasToChord(std::vector<uint8_t> & chord, int percent)
+void applyNoteBiasToChord(std::vector<uint8_t> &chord, int percent)
 {
   if (chord.empty() || percent == 0)
     return;
@@ -445,27 +441,8 @@ void setup()
   handleNoteOn(67);
   handleNoteOff(55);
 
-  // Initialize stepsPerBar and arpInterval
-  stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-
-  // Set default barNumerator and barDenominatorIndex
-  int barNumerator = 6;
-  int barDenominatorIndex = 3; // 8
-
-  meterType = getMeterType(barNumerator, barDenominatorOptions[barDenominatorIndex]);
-  Serial.print(barNumerator);
-  Serial.print("/");
-  Serial.print(barDenominatorOptions[barDenominatorIndex]);
-  Serial.print(" is: ");
-  Serial.println(meterType);
-
-  // Use selected numerator/denominator for bar length
-  unsigned long barLengthMs = calculateBarLength(bpm, meterType, barNumerator, barDenominatorOptions[barDenominatorIndex]);
-  Serial.println(barLengthMs); // Should print 1000
-
-  // unsigned long barLengthMs = 60000 / bpm * 4;
-  unsigned long noteLengthMs = barLengthMs / stepsPerBar;
-  arpInterval = noteLengthMs;
+  // Initialize arpInterval
+  arpInterval = 60000 / (bpm); // ms per note
 }
 
 // --- LOOP ---
@@ -639,10 +616,6 @@ void loop()
     case MODE_STRETCH:
       noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
       break;
-    case MODE_STEPS:
-      stepsPerBarIndex = constrain(stepsPerBarIndex + delta, 0, stepsPerBarOptionsSize - 1);
-      stepsPerBar = stepsPerBarOptions[stepsPerBarIndex];
-      break;
     case MODE_BAR:
       modeBar = !modeBar;
       Serial.print("MODE_BAR: ");
@@ -663,11 +636,13 @@ void loop()
     }
     // Update arpInterval to reflect the note length for the selected bar
     unsigned long barLengthMs = calculateBarLength(bpm, meterType, barNumerator, barDenominatorOptions[barDenominatorIndex]);
-    unsigned long noteLengthMs = barLengthMs / stepsPerBar;
+    // Step length is barLengthMs / numerator
+    // unsigned long noteLengthMs = barLengthMs / barNumerator;
+    noteLengthMs = barLengthMs / barNumerator;
     arpInterval = noteLengthMs;
 
-    // Print barLengthMs and noteLengthMs when numerator, denominator, or steps change
-    if (encoderMode == MODE_BAR_NUMERATOR || encoderMode == MODE_BAR_DENOMINATOR || encoderMode == MODE_STEPS)
+    // Print barLengthMs and noteLengthMs when numerator or denominator change
+    if (encoderMode == MODE_BAR_NUMERATOR || encoderMode == MODE_BAR_DENOMINATOR)
     {
       Serial.print("barLengthMs: ");
       Serial.print(barLengthMs);
@@ -888,7 +863,7 @@ void loop()
   if (modeBar)
   {
     std::vector<uint8_t> adjustedPlayingChord;
-    size_t steps = stepsPerBar;
+    size_t steps = barNumerator; // Use barNumerator as the number of steps
 
     if (playingChord.size() > steps)
     {
@@ -1021,7 +996,6 @@ void loop()
   static int lastRhythmPattern = selectedRhythmPattern;
   static int lastNoteRangeShift = noteRangeShift;
   static int lastNoteRangeStretch = noteRangeStretch;
-  static int lastStepsPerBarIndex = stepsPerBarIndex;
   static int lastBarNumerator = barNumerator;
   static int lastBarDenominatorIndex = barDenominatorIndex;
 
@@ -1039,7 +1013,6 @@ void loop()
   printIfChanged("Rhythm Pattern: ", lastRhythmPattern, selectedRhythmPattern, selectedRhythmPattern);
   printIfChanged("Range Shift: ", lastNoteRangeShift, noteRangeShift, noteRangeShift);
   printIfChanged("Range Stretch: ", lastNoteRangeStretch, noteRangeStretch, noteRangeStretch);
-  printIfChanged("Steps (4/4 bar): ", lastStepsPerBarIndex, stepsPerBarIndex, stepsPerBarOptions[stepsPerBarIndex]);
   printIfChanged("Bar Numerator: ", lastBarNumerator, barNumerator, barNumerator);
   printIfChanged("Bar Denominator: ", lastBarDenominatorIndex, barDenominatorIndex, barDenominatorOptions[barDenominatorIndex]);
 

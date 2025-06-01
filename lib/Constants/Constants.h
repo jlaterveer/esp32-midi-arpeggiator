@@ -39,7 +39,8 @@ const int barDenominatorOptionsSize = sizeof(barDenominatorOptions) / sizeof(bar
 extern int bpm;
 extern unsigned long arpInterval;
 //extern int notesPerBeat;
-extern int stepsPerBar;
+//extern int stepsPerBar;
+extern unsigned long noteLengthMs;
 
 // --- Extern declarations for arpeggiator/chord state (needed by midiUtils.cpp) ---
 extern bool capturingChord;
@@ -61,7 +62,7 @@ enum EncoderMode
     MODE_PATTERN_PLAYBACK,
     MODE_REVERSE,
     MODE_SMOOTH, // Pattern smooth mode
-    MODE_STEPS,  // Number of steps in a 4-beat bar
+    //MODE_STEPS,  // Number of steps in a 4-beat bar
     MODE_BAR,    // Limit or repeat playingChord to match steps
     MODE_BAR_NUMERATOR,
     MODE_BAR_DENOMINATOR,

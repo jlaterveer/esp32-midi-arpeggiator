@@ -1,7 +1,7 @@
 #ifndef ARP_UTILS_H
 #define ARP_UTILS_H
 
-extern const char *modeNames[22];
+extern const char *modeNames[21];
 extern const unsigned char ttable[6][4];
 extern volatile unsigned char state;
 

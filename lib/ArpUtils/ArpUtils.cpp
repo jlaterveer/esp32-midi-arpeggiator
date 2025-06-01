@@ -10,7 +10,7 @@ const char *modeNames[] = {
     "Pattern Playback Mode",
     "Pattern Reverse",
     "Pattern Smooth",
-    "Steps (4/4 bar)",
+    //"Steps (4/4 bar)",
     "Bar Mode",
     "Numerator",
     "Denominator",
