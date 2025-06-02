@@ -78,9 +78,28 @@ enum EncoderMode
     MODE_COUNT // Stretch pattern up/down by adding notes
 };
 
+enum MeterType
+{
+    SIMPLE_METER,
+    COMPOUND_METER,
+    IRREGULAR_METER
+};
+
 // --- STRAIGHT/LOOP mode for pattern playback ---
-enum PatternPlaybackMode
+enum PatternLoop
 {
     STRAIGHT,
     LOOP
+};
+
+enum PatternReverse
+{
+    FORWARD,
+    REVERSE
+};
+
+enum PatternSmooth
+{
+    SMOOTH,
+    RAW
 };

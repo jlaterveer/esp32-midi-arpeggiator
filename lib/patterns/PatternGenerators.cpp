@@ -6,7 +6,7 @@ const char *customPatternNames[PAT_COUNT] = {
     "Up", "Down", "Up-Down", "Down-Up", "Outer-In", "Inward Bounce", "Zigzag", "Spiral", "Mirror", "Saw", "Saw Reverse",
     "Bounce", "Reverse Bounce", "Ladder", "Skip Up", "Jump Step", "Crossover", "Random", "Even-Odd", "Odd-Even",
     "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
-    "Backward Jump", "Inside Bounce", "Staggered Rise", "As Played"};
+    "Backward Jump", "Inside Bounce", "Staggered Rise", "patternUpDownHalf", "As Played"};
 
 std::vector<uint8_t> patternUp(int n) { std::vector<uint8_t> v(n); for (int i = 0; i < n; ++i) v[i] = i; return v; }
 std::vector<uint8_t> patternDown(int n) { std::vector<uint8_t> v(n); for (int i = 0; i < n; ++i) v[i] = n - 1 - i; return v; }
@@ -39,6 +39,7 @@ std::vector<uint8_t> patternShortLong(int n) { std::vector<uint8_t> v; for (int 
 std::vector<uint8_t> patternBackwardJump(int n) { std::vector<uint8_t> v; for (int i = n - 1; i >= 0; i -= 3) v.push_back(i); for (int i = n - 2; i >= 0; i -= 3) v.push_back(i); return v; }
 std::vector<uint8_t> patternInsideBounce(int n) { std::vector<uint8_t> v; int left = 1, right = n - 2; while (left <= right) { v.push_back(left); if (left != right) v.push_back(right); ++left; --right; } return v; }
 std::vector<uint8_t> patternStaggeredRise(int n) { std::vector<uint8_t> v; for (int i = 0; i < n; i += 2) v.push_back(i); for (int i = 1; i < n; i += 2) v.push_back(i); return v; }
+std::vector<uint8_t> patternUpDownHalf(int n) {std::vector<uint8_t> v; int half = n / 2; for (int i = 0; i < half; ++i) v.push_back(i); for (int i = n - 1; i >= half; --i) v.push_back(i); return v; }
 std::vector<uint8_t> patternAsPlayed(int n, const std::vector<uint8_t> &playedOrder) { std::vector<uint8_t> v; for (int i = 0; i < n; ++i) v.push_back(i); return v; }
 
 PatternGen customPatternFuncs[PAT_COUNT - 1] = {
@@ -46,4 +47,4 @@ PatternGen customPatternFuncs[PAT_COUNT - 1] = {
     patternMirror, patternSaw, patternSawReverse, patternBounce, patternReverseBounce, patternLadder, patternSkipUp,
     patternJumpStep, patternCrossover, patternRandom, patternEvenOdd, patternOddEven, patternEdgeLoop, patternCenterBounce,
     patternUpDouble, patternSkipReverse, patternSnake, patternPendulum, patternAsymmetricLoop, patternShortLong,
-    patternBackwardJump, patternInsideBounce, patternStaggeredRise};
+    patternBackwardJump, patternInsideBounce, patternStaggeredRise, patternUpDownHalf};

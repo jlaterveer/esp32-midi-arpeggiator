@@ -36,6 +36,7 @@ enum CustomPattern
   PAT_BACKWARDJUMP,
   PAT_INSIDEBOUNCE,
   PAT_STAGGEREDRISE,
+  PAT_UPDOWNHALF,
   PAT_ASPLAYED,
   PAT_COUNT // must be last
 };
@@ -73,6 +74,7 @@ std::vector<uint8_t> patternShortLong(int n);
 std::vector<uint8_t> patternBackwardJump(int n);
 std::vector<uint8_t> patternInsideBounce(int n);
 std::vector<uint8_t> patternStaggeredRise(int n);
+std::vector<uint8_t> patternUpDownHalf(int n);
 std::vector<uint8_t> patternAsPlayed(int n, const std::vector<uint8_t> &playedOrder);
 
 typedef std::vector<uint8_t> (*PatternGen)(int);

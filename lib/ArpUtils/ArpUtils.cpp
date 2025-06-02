@@ -1,5 +1,6 @@
 #include "ArpUtils.h"
 #include <Arduino.h>
+#include "Constants.h"
 
 const char *modeNames[] = {
     "BPM",
@@ -30,6 +31,21 @@ const char *meterTypes[] = {
     "Compound Meter",
     "Irregular Meter"};
 
+// Helper to convert PatternLoop enum to a human-readable string
+const char *patternLoopOptions[] = {
+    "Straight",
+    "Loop"};
+
+// Helper to convert PatternReverse enum to a human-readable string
+const char *patternReverseOptions[] = {
+    "Forward",
+    "Reverse"};
+
+// Helper to convert PatternSmooth enum to a human-readable string
+const char *patternSmoothOptions[] = {
+    "Smooth",
+    "Raw"};
+
 template <typename T>
 void printIfChanged(const char *label, T &lastValue, T currentValue, T printValue)
 {
@@ -44,7 +60,6 @@ void printIfChanged(const char *label, T &lastValue, T currentValue, T printValu
 // Explicit template instantiations for common types
 template void printIfChanged<int>(const char *, int &, int, int);
 template void printIfChanged<bool>(const char *, bool &, bool, bool);
-// Add more explicit instantiations if needed
 
 // --- ENCODER STATE MACHINE ---
 // Rotary encoder state table for quadrature decoding

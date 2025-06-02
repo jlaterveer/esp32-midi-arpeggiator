@@ -36,46 +36,38 @@ const char *rhythmPatternNames[rhythmPatternCount] = {
     "Edge Loop", "Center Bounce", "Up Double", "Skip Reverse", "Snake", "Pendulum", "Asymmetric Loop", "Short Long",
     "Backward Jump", "Inside Bounce", "Staggered Rise"};
 
-EncoderMode encoderMode = MODE_BPM;
-
 const int encoderModeSize = MODE_COUNT; // Use enum count for size
-
-PatternPlaybackMode patternPlaybackMode = LOOP;
 
 // --- PARAMETERS ---
 // (moved to Constants.h)
 
 // --- DEFAULTS ---
-int bpm = 96;                        // Beats per minute
+int bpm = 120;                        // Beats per minute
 int noteLengthPercent = 40;          // Note length as percent of interval
 int noteVelocity = 127;              // MIDI velocity
 int octaveRange = 0;                 // Octave spread
 int transpose = 0;                   // Transpose in octaves
-int velocityDynamicsPercent = 56;    // Velocity randomization percent
-bool timingHumanize = false;         // Enable timing humanization
-int timingHumanizePercent = 4;       // Humanization percent
-int noteLengthRandomizePercent = 20; // Note length randomization percent
+int velocityDynamicsPercent = 0;    // Velocity randomization percent 56
+bool timingHumanize = false;         // Enable timing humanization 
+int timingHumanizePercent = 0;       // Humanization percent 4
+int noteLengthRandomizePercent = 0; // Note length randomization percent 20
 int noteBalancePercent = 0;          // Note bias percent
 int randomChordPercent = 0;          // Percentage of steps to replace with random 3-note chords
 int noteRangeShift = 0;              // Range shift for lowest/highest note, -24..24 (or -127..127 if you want)
 int noteRangeStretch = 0;            // Range stretch for lowest/highest note, -8..8
 int noteRepeat = 1;                  // Number of repeats per note
-bool modeBar = false;                // MODE_BAR ON/OFF state
-bool patternReverse = false;         // REVERSE mode for pattern playback
-bool patternSmooth = true;           // SMOOTH mode for pattern playback
+bool modeBar = true;                // MODE_BAR ON/OFF state
+//bool patternReverse = false;         // REVERSE mode for pattern playback
+//bool patternSmooth = true;           // SMOOTH mode for pattern playback
 int barNumerator = 4;
 int barDenominatorIndex = 3;
 unsigned long noteLengthMs = 0;
-
-// Debounce state for encoder switch
-static uint16_t encoderSWDebounce = 0;
-
-enum MeterType
-{
-  SIMPLE_METER,
-  COMPOUND_METER,
-  IRREGULAR_METER
-};
+EncoderMode encoderMode = MODE_BPM;
+PatternLoop patternLoop = LOOP;
+PatternReverse patternReverse = FORWARD;
+PatternSmooth patternSmooth = RAW;
+MeterType meterType = COMPOUND_METER;
+static uint16_t encoderSWDebounce = 0; // Debounce state for encoder switch
 
 MeterType getMeterType(int numerator, int denominator)
 {
@@ -90,8 +82,6 @@ MeterType getMeterType(int numerator, int denominator)
   }
   return IRREGULAR_METER;
 }
-
-MeterType meterType = COMPOUND_METER;
 
 // Calculate the bar length in ms
 // unsigned long calculateBarLength(int bpm, int numerator, int denominator)
@@ -304,13 +294,14 @@ void handleMidiCC(uint8_t cc, uint8_t value)
     selectedPatternIndex = constrain(map(value, 0, 127, 0, PAT_COUNT - 1), 0, PAT_COUNT - 1);
     break;
   case 6: // CC6 -> Pattern Playback Mode
-    patternPlaybackMode = (value >= 64) ? LOOP : STRAIGHT;
+    patternLoop = (value >= 64) ? LOOP : STRAIGHT;
     break;
   case 7: // CC7 -> Pattern Reverse
-    patternReverse = (value >= 64);
+    patternReverse = (value >= 64) ? REVERSE : FORWARD;
     break;
   case 8: // CC8 -> Pattern Smooth
-    patternSmooth = (value >= 64);
+    patternSmooth = (value >= 64) ? SMOOTH : RAW;
+    ;
     break;
   case 9: // CC9 -> Note Repeat
     noteRepeat = constrain(map(value, 0, 127, 1, 4), 1, 4);
@@ -346,7 +337,7 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   }
   // Update arpInterval to reflect the note length for a bar
   unsigned long barLengthMs = calculateBarLength(bpm, meterType, 6, 8);
-  
+
   noteLengthMs = barLengthMs / barNumerator;
   arpInterval = noteLengthMs;
 }
@@ -529,7 +520,7 @@ void loop()
         }
         // Apply LOOP mode preview
         std::vector<uint8_t> patPreview = pat;
-        if (patternPlaybackMode == LOOP && pat.size() > 2)
+        if (patternLoop == LOOP && pat.size() > 2)
         {
           for (int i = pat.size() - 2; i > 0; --i)
             patPreview.push_back(pat[i]);
@@ -547,7 +538,7 @@ void loop()
         }
       }
       Serial.print("] ");
-      Serial.println(patternPlaybackMode == STRAIGHT ? "STRAIGHT" : "LOOP");
+      Serial.println(patternLoop == STRAIGHT ? "STRAIGHT" : "LOOP");
       break;
     case MODE_REPEAT:
       noteRepeat = constrain(noteRepeat + delta, 1, 4);
@@ -569,19 +560,13 @@ void loop()
       noteBalancePercent = constrain(noteBalancePercent + delta * 10, -100, 100);
       break;
     case MODE_PATTERN_PLAYBACK:
-      patternPlaybackMode = (patternPlaybackMode == STRAIGHT) ? LOOP : STRAIGHT;
-      Serial.print("Pattern Loop: ");
-      Serial.println(patternPlaybackMode == STRAIGHT ? "NO" : "YES");
+      patternLoop = patternLoop == STRAIGHT ? LOOP : STRAIGHT;
       break;
     case MODE_REVERSE:
-      patternReverse = !patternReverse;
-      Serial.print("Pattern Reverse: ");
-      Serial.println(patternReverse ? "REVERSE" : "NORMAL");
+      patternReverse = patternReverse == FORWARD ? REVERSE : FORWARD;
       break;
     case MODE_SMOOTH:
-      patternSmooth = !patternSmooth;
-      Serial.print("Pattern Smooth: ");
-      Serial.println(patternSmooth ? "SMOOTH" : "NORMAL");
+      patternSmooth = patternSmooth == RAW ? SMOOTH : RAW;
       break;
     case MODE_RANDOM_CHORD:
       randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
@@ -629,7 +614,7 @@ void loop()
 
     // Update arpInterval to reflect the note length for the selected bar
     unsigned long barLengthMs = calculateBarLength(bpm, meterType, barNumerator, barDenominatorOptions[barDenominatorIndex]);
-    
+
     // Step length is barLengthMs / numerator
     noteLengthMs = barLengthMs / barNumerator;
     arpInterval = noteLengthMs;
@@ -763,7 +748,7 @@ void loop()
 
   // Apply LOOP mode to patternIndices
   std::vector<uint8_t> patternIndicesFinal = patternIndices;
-  if (patternPlaybackMode == LOOP && patternIndices.size() > 2)
+  if (patternLoop == LOOP && patternIndices.size() > 2)
   {
     for (int i = patternIndices.size() - 2; i > 0; --i)
       patternIndicesFinal.push_back(patternIndices[i]);
@@ -971,6 +956,9 @@ void loop()
   static int lastBPM = bpm, lastLength = noteLengthPercent, lastVelocity = noteVelocity, lastOctave = octaveRange;
   static int lastNoteRepeat = noteRepeat, lastTranspose = transpose;
   static EncoderMode lastMode = encoderMode;
+  static PatternLoop lastPatternLoop = patternLoop;
+  static PatternReverse lastPatternReverse = patternReverse;
+  static PatternSmooth lastPatternSmooth = patternSmooth;
   static int lastUseVelocityDynamics = velocityDynamicsPercent;
   static int lastTimingHumanize = timingHumanize;
   static int lastTimingHumanizePercent = timingHumanizePercent;
@@ -982,11 +970,30 @@ void loop()
   static int lastNoteRangeStretch = noteRangeStretch;
   static int lastBarNumerator = barNumerator;
   static int lastBarDenominatorIndex = barDenominatorIndex;
+  char debugBuffer[64];
 
   printIfChanged("BPM: ", lastBPM, bpm, bpm);
   printIfChanged("Note Length %: ", lastLength, noteLengthPercent, noteLengthPercent);
   printIfChanged("Velocity: ", lastVelocity, noteVelocity, noteVelocity);
   printIfChanged("Octave Range: ", lastOctave, octaveRange, octaveRange);
+  if (patternLoop != lastPatternLoop)
+  {
+    sprintf(debugBuffer, "Pattern Loop: %s", patternLoopOptions[patternLoop]);
+    Serial.println(debugBuffer);
+    lastPatternLoop = patternLoop;
+  }
+  if (patternReverse != lastPatternReverse)
+  {
+    sprintf(debugBuffer, "Pattern Reverse: %s", patternReverseOptions[patternReverse]);
+    Serial.println(debugBuffer);
+    lastPatternReverse = patternReverse;
+  }
+  if (patternSmooth != lastPatternSmooth)
+  {
+    sprintf(debugBuffer, "Pattern Smooth: %s", patternSmoothOptions[patternSmooth]);
+    Serial.println(debugBuffer);
+    lastPatternSmooth = patternSmooth;
+  }
   printIfChanged("Note Repeat: ", lastNoteRepeat, noteRepeat, noteRepeat);
   printIfChanged("Transpose: ", lastTranspose, transpose, transpose);
   printIfChanged("Velocity Dynamics Percent: ", lastUseVelocityDynamics, velocityDynamicsPercent, velocityDynamicsPercent);
