@@ -342,15 +342,6 @@ void handleMidiCC(uint8_t cc, uint8_t value)
   arpInterval = noteLengthMs;
 }
 
-// --- INTERNAL MIDI CC SENDER ---
-// Stuur een "virtueel" MIDI CC-bericht naar de handler (en optioneel naar MIDI OUT)
-void sendInternalMidiCC(uint8_t cc, uint8_t value) {
-  // Optioneel: stuur ook naar fysieke MIDI OUT/USB
-  // usbMIDI.sendControlChange(cc, value, 1);
-  // Serial2.write({0xB0, cc, value}, 3);
-  handleMidiCC(cc, value);
-}
-
 // --- TIMING HUMANIZATION FUNCTION ---
 // Returns a random offset for note timing (ms)
 int getTimingHumanizeOffset(unsigned long noteLengthMs)
@@ -495,16 +486,16 @@ void loop()
     switch (encoderMode)
     {
     case MODE_BPM:
-      sendInternalMidiCC(1, map(constrain(bpm + delta, 40, 240), 40, 240, 0, 127));
+      bpm = constrain(bpm + delta, 40, 240);
       break;
     case MODE_LENGTH:
-      sendInternalMidiCC(2, map(constrain(noteLengthPercent + delta * 5, 5, 100), 5, 100, 0, 127));
+      noteLengthPercent = constrain(noteLengthPercent + delta * 5, 5, 100);
       break;
     case MODE_VELOCITY:
-      sendInternalMidiCC(3, map(constrain(noteVelocity + delta, 1, 127), 1, 127, 0, 127));
+      noteVelocity = constrain(noteVelocity + delta, 1, 127);
       break;
     case MODE_OCTAVE:
-      sendInternalMidiCC(4, map(constrain(octaveRange + delta, minOctave, maxOctave), -3, 3, 0, 127));
+      octaveRange = constrain(octaveRange + delta, minOctave, maxOctave);
       break;
     case MODE_PATTERN:
       selectedPatternIndex += delta;
@@ -550,19 +541,20 @@ void loop()
       Serial.println(patternLoop == STRAIGHT ? "STRAIGHT" : "LOOP");
       break;
     case MODE_REPEAT:
-      sendInternalMidiCC(9, map(constrain(noteRepeat + delta, 1, 4), 1, 4, 0, 127));
+      noteRepeat = constrain(noteRepeat + delta, 1, 4);
       break;
     case MODE_TRANSPOSE:
-      sendInternalMidiCC(10, map(constrain(transpose + delta, minTranspose, maxTranspose), minTranspose, maxTranspose, 0, 127));
+      transpose = constrain(transpose + delta, minTranspose, maxTranspose);
       break;
     case MODE_DYNAMICS:
-      sendInternalMidiCC(11, map(constrain(velocityDynamicsPercent + delta, 0, 100), 0, 100, 0, 127));
+      velocityDynamicsPercent = constrain(velocityDynamicsPercent + delta, 0, 100);
       break;
     case MODE_HUMANIZE:
-      sendInternalMidiCC(12, map(constrain(timingHumanizePercent + delta, 0, maxTimingHumanizePercent), 0, maxTimingHumanizePercent, 0, 127));
+      timingHumanizePercent = constrain(timingHumanizePercent + delta, 0, maxTimingHumanizePercent);
+      timingHumanize = (timingHumanizePercent > 0);
       break;
     case MODE_LENGTH_RANDOMIZE:
-      sendInternalMidiCC(13, map(constrain(noteLengthRandomizePercent + delta, 0, maxNoteLengthRandomizePercent), 0, maxNoteLengthRandomizePercent, 0, 127));
+      noteLengthRandomizePercent = constrain(noteLengthRandomizePercent + delta, 0, maxNoteLengthRandomizePercent);
       break;
     case MODE_BALANCE:
       noteBalancePercent = constrain(noteBalancePercent + delta * 10, -100, 100);
@@ -577,16 +569,18 @@ void loop()
       patternSmooth = patternSmooth == RAW ? SMOOTH : RAW;
       break;
     case MODE_RANDOM_CHORD:
-      sendInternalMidiCC(16, map(constrain(randomChordPercent + delta * 10, 0, 100), 0, 100, 0, 127));
+      randomChordPercent = constrain(randomChordPercent + delta * 10, 0, 100);
       break;
     case MODE_RHYTHM:
-      sendInternalMidiCC(17, map(constrain(selectedRhythmPattern + delta, 0, rhythmPatternCount - 1), 0, rhythmPatternCount - 1, 0, 127));
+      selectedRhythmPattern = constrain(selectedRhythmPattern + delta, 0, rhythmPatternCount - 1);
+      // Serial.print("Rhythm Pattern: ");
+      // Serial.println(rhythmPatternNames[selectedRhythmPattern]);
       break;
     case MODE_RANGE:
-      sendInternalMidiCC(18, map(constrain(noteRangeShift + delta, -24, 24), -24, 24, 0, 127));
+      noteRangeShift = constrain(noteRangeShift + delta, -24, 24);
       break;
     case MODE_STRETCH:
-      sendInternalMidiCC(19, map(constrain(noteRangeStretch + delta, -24, 24), -24, 24, 0, 127));
+      noteRangeStretch = constrain(noteRangeStretch + delta, -24, 24);
       break;
     case MODE_BAR:
       modeBar = !modeBar;
